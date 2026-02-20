@@ -1,0 +1,274 @@
+﻿<Page x:Class="DrivingSchool.Views.FinancialReportsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Финансовые отчеты"
+      Background="White">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0" Text="Финансовые отчеты" FontSize="24" FontWeight="Bold" Margin="0,0,0,10"/>
+
+        <!-- Панель фильтров -->
+        <Border Grid.Row="1" Background="#F5F5F5" Padding="15" CornerRadius="5" Margin="0,0,0,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Период -->
+                <TextBlock Grid.Column="0" Text="Период:" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="Bold"/>
+                <ComboBox x:Name="PeriodComboBox" Grid.Column="1" 
+                          Width="180" Height="30" 
+                          SelectionChanged="PeriodComboBox_SelectionChanged"
+                          Margin="0,0,20,0">
+                    <ComboBoxItem Content="За сегодня" IsSelected="True"/>
+                    <ComboBoxItem Content="За текущую неделю"/>
+                    <ComboBoxItem Content="За текущий месяц"/>
+                    <ComboBoxItem Content="За текущий квартал"/>
+                    <ComboBoxItem Content="За текущий год"/>
+                    <ComboBoxItem Content="За все время"/>
+                    <ComboBoxItem Content="Произвольный период"/>
+                </ComboBox>
+
+                <!-- Дата с -->
+                <TextBlock Grid.Column="2" Text="с:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <DatePicker x:Name="StartDatePicker" Grid.Column="3" 
+                            Width="160" Height="30" 
+                            Margin="0,0,20,0"/>
+
+                <!-- Дата по -->
+                <TextBlock Grid.Column="4" Text="по:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <DatePicker x:Name="EndDatePicker" Grid.Column="5" 
+                            Width="160" Height="30" 
+                            Margin="0,0,20,0"/>
+
+                <!-- Кнопка сформировать -->
+                <Button Grid.Column="6" 
+                        Content="Сформировать отчет" 
+                        Click="GenerateReportButton_Click"
+                        Width="150" Height="35" 
+                        Background="#4CAF50" Foreground="White"
+                        HorizontalAlignment="Right"/>
+            </Grid>
+        </Border>
+
+        <!-- Основной контент с вкладками -->
+        <TabControl x:Name="ReportTypeTabControl" Grid.Row="2">
+            <!-- Вкладка Общий отчет -->
+            <TabItem Header="Общий отчет">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <!-- Сводная информация -->
+                        <Border Background="#E3F2FD" Padding="15" CornerRadius="5" Margin="0,0,0,15">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock Text="Общий доход" FontSize="12" Foreground="#666666"/>
+                                    <TextBlock x:Name="TotalIncomeText" Text="0 руб." FontSize="20" FontWeight="Bold" Foreground="#4CAF50"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                    <TextBlock Text="Количество оплат" FontSize="12" Foreground="#666666"/>
+                                    <TextBlock x:Name="TotalPaymentsText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#2196F3"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                    <TextBlock Text="Средний платеж" FontSize="12" Foreground="#666666"/>
+                                    <TextBlock x:Name="AveragePaymentText" Text="0 руб." FontSize="20" FontWeight="Bold" Foreground="#FF9800"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                    <TextBlock Text="Общая задолженность" FontSize="12" Foreground="#666666"/>
+                                    <TextBlock x:Name="TotalDebtText" Text="0 руб." FontSize="20" FontWeight="Bold" Foreground="#f44336"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- График платежей -->
+                        <GroupBox Header="Динамика платежей" Margin="0,0,0,15">
+                            <Grid Height="200">
+                                <ListBox x:Name="PaymentsChart" 
+                                         ItemsSource="{Binding}" 
+                                         Background="#F9F9F9"
+                                         BorderThickness="0">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="5,0" Width="40" Background="#E3F2FD" CornerRadius="3">
+                                                <StackPanel>
+                                                    <Rectangle Height="{Binding Amount, Converter={StaticResource AmountToHeightConverter}}" 
+                                                               Fill="#2196F3" Margin="2,0,2,0"/>
+                                                    <TextBlock Text="{Binding DateString}" FontSize="10" HorizontalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </GroupBox>
+
+                        <!-- Статистика по типам платежей -->
+                        <GroupBox Header="Статистика по типам платежей" Margin="0,0,0,15">
+                            <DataGrid x:Name="PaymentTypesDataGrid" 
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      Height="150"
+                                      Margin="5">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Тип платежа" Binding="{Binding Type}" Width="*"/>
+                                    <DataGridTextColumn Header="Сумма" Binding="{Binding AmountString}" Width="150"/>
+                                    <DataGridTextColumn Header="Количество" Binding="{Binding Count}" Width="100"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+
+                        <!-- Последние платежи -->
+                        <GroupBox Header="Последние платежи">
+                            <DataGrid x:Name="RecentPaymentsDataGrid" 
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      Height="200"
+                                      Margin="5">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Дата" Binding="{Binding PaymentDateString}" Width="120"/>
+                                    <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="*"/>
+                                    <DataGridTextColumn Header="Сумма" Binding="{Binding AmountString}" Width="120"/>
+                                    <DataGridTextColumn Header="Тип" Binding="{Binding PaymentType}" Width="120"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Вкладка Отчет по оплатам -->
+            <TabItem Header="Отчет по оплатам">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="PaymentsSummaryText" Grid.Row="0" 
+                               Text="Всего оплат: 0" 
+                               FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <DataGrid x:Name="PaymentsDataGrid" 
+                              Grid.Row="1"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Дата" Binding="{Binding PaymentDateString}" Width="120"/>
+                            <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="*"/>
+                            <DataGridTextColumn Header="Сумма" Binding="{Binding AmountString}" Width="120"/>
+                            <DataGridTextColumn Header="Тип платежа" Binding="{Binding PaymentType}" Width="120"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Отчет по студентам -->
+            <TabItem Header="Отчет по студентам">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="StudentsSummaryText" Grid.Row="0" 
+                               Text="Студентов: 0" 
+                               FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <DataGrid x:Name="StudentsDataGrid" 
+                              Grid.Row="1"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="200"/>
+                            <DataGridTextColumn Header="Группа" Binding="{Binding GroupName}" Width="100"/>
+                            <DataGridTextColumn Header="К оплате" Binding="{Binding TotalToPayString}" Width="100"/>
+                            <DataGridTextColumn Header="Оплачено" Binding="{Binding TotalPaidString}" Width="100"/>
+                            <DataGridTextColumn Header="За период" Binding="{Binding PaidInPeriodString}" Width="100"/>
+                            <DataGridTextColumn Header="Долг" Binding="{Binding DebtString}" Width="100"/>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="120"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Отчет по группам -->
+            <TabItem Header="Отчет по группам">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <DataGrid x:Name="GroupsDataGrid" 
+                              Grid.Row="0"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Группа" Binding="{Binding GroupName}" Width="150"/>
+                            <DataGridTextColumn Header="Студентов" Binding="{Binding StudentCount}" Width="70"/>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="100"/>
+                            <DataGridTextColumn Header="Ожидаемый доход" Binding="{Binding ExpectedIncomeString}" Width="120"/>
+                            <DataGridTextColumn Header="Оплачено за период" Binding="{Binding ActualIncomeString}" Width="130"/>
+                            <DataGridTextColumn Header="Оплачено всего" Binding="{Binding ActualIncomeAllTimeString}" Width="120"/>
+                            <DataGridTextColumn Header="Долг" Binding="{Binding DebtString}" Width="100"/>
+                            <DataGridTextColumn Header="Выполнение" Binding="{Binding CompletionRateString}" Width="80"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Отчет по категориям -->
+            <TabItem Header="Отчет по категориям">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="CategoriesSummaryText" Grid.Row="0" 
+                               Text="Всего студентов по категориям: 0" 
+                               FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <DataGrid x:Name="CategoriesDataGrid" 
+                              Grid.Row="1"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Категория" Binding="{Binding CategoryName}" Width="200"/>
+                            <DataGridTextColumn Header="Студентов" Binding="{Binding StudentCount}" Width="80"/>
+                            <DataGridTextColumn Header="Ожидаемый доход" Binding="{Binding ExpectedIncomeString}" Width="120"/>
+                            <DataGridTextColumn Header="Оплачено" Binding="{Binding ActualIncomeString}" Width="120"/>
+                            <DataGridTextColumn Header="Долг" Binding="{Binding DebtString}" Width="100"/>
+                            <DataGridTextColumn Header="Ср. платеж" Binding="{Binding AveragePaymentString}" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Page>

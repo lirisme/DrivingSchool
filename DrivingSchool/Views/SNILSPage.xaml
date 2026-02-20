@@ -1,0 +1,116 @@
+﻿<Page x:Class="DrivingSchool.Views.SNILSPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Данные СНИЛС"
+      Background="White">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0" Text="Данные СНИЛС учащихся" FontSize="24" FontWeight="Bold" Margin="0,0,0,10"/>
+
+        <!-- Панель поиска студента -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="Студент:" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="Bold"/>
+            <TextBox x:Name="SearchTextBox" 
+                     Width="300" Height="30" 
+                     Padding="5" 
+                     TextChanged="SearchTextBox_TextChanged"
+                     ToolTip="Введите фамилию или телефон студента"/>
+
+            <Button x:Name="ClearSearchButton" 
+                    Content="✕" 
+                    Width="30" Height="30" 
+                    Click="ClearSearch_Click"
+                    Margin="5,0,0,0"/>
+        </StackPanel>
+
+        <!-- Результаты поиска студентов -->
+        <ListBox x:Name="SearchResultsListBox" 
+                 Grid.Row="2" 
+                 MaxHeight="150"
+                 Margin="130,0,0,10"
+                 Visibility="Collapsed"
+                 DisplayMemberPath="FullName"
+                 SelectionChanged="SearchResultsListBox_SelectionChanged"
+                 Background="White" BorderBrush="#CCCCCC"/>
+
+        <!-- Выбранный студент -->
+        <Border x:Name="SelectedStudentPanel" 
+                Grid.Row="2" 
+                Background="#E3F2FD" 
+                Padding="10" 
+                CornerRadius="5" 
+                Margin="0,0,0,10"
+                Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock x:Name="SelectedStudentText" FontWeight="Bold" FontSize="14"/>
+                <TextBlock x:Name="SelectedStudentDetails" FontSize="12" Foreground="#666666" Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Панель кнопок -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,10" HorizontalAlignment="Right">
+            <Button x:Name="AddSNILSButton" 
+                    Content="➕ Добавить СНИЛС" 
+                    Click="AddSNILS_Click"
+                    Width="150" Height="35" 
+                    Background="#4CAF50" Foreground="White"
+                    Margin="0,0,10,0" IsEnabled="False"/>
+
+            <Button x:Name="EditSNILSButton" 
+                    Content="✏️ Редактировать" 
+                    Click="EditSNILS_Click"
+                    Width="130" Height="35" 
+                    Background="#2196F3" Foreground="White"
+                    Margin="0,0,10,0" IsEnabled="False"/>
+
+            <Button x:Name="DeleteSNILSButton" 
+                    Content="🗑️ Удалить" 
+                    Click="DeleteSNILS_Click"
+                    Width="100" Height="35" 
+                    Background="#f44336" Foreground="White"
+                    Margin="0,0,10,0" IsEnabled="False"/>
+
+            <Button x:Name="ViewSNILSButton" 
+                    Content="👁️ Просмотр" 
+                    Click="ViewSNILS_Click"
+                    Width="100" Height="35" 
+                    Background="#9C27B0" Foreground="White" 
+                    IsEnabled="False"/>
+        </StackPanel>
+
+        <!-- Таблица с данными СНИЛС -->
+        <DataGrid x:Name="SNILSGrid" 
+                  Grid.Row="4"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  SelectionChanged="SNILSGrid_SelectionChanged"
+                  MouseDoubleClick="SNILSGrid_MouseDoubleClick"
+                  Margin="0,0,0,10">
+
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
+                <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="200"/>
+                <DataGridTextColumn Header="Номер СНИЛС" Binding="{Binding FormattedNumber}" Width="180"/>
+                <DataGridTextColumn Header="Дата выдачи" Binding="{Binding IssueDate, StringFormat={}{0:dd.MM.yyyy}}" Width="100"/>
+                <DataGridTextColumn Header="Кем выдан" Binding="{Binding IssuedBy}" Width="300"/>
+                <DataGridTextColumn Header="Дата создания" Binding="{Binding CreatedDate, StringFormat={}{0:dd.MM.yyyy}}" Width="100"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Информационная панель -->
+        <Border Grid.Row="5" Background="#F0F8FF" Padding="10" CornerRadius="5">
+            <TextBlock x:Name="InfoTextBlock" Text="Выберите студента для работы с данными СНИЛС" 
+                      FontStyle="Italic" Foreground="#666666"/>
+        </Border>
+    </Grid>
+</Page>

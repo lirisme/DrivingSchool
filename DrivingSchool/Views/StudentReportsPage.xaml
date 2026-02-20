@@ -1,0 +1,267 @@
+﻿<Page x:Class="DrivingSchool.Views.StudentReportsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Отчеты по учащимся"
+      Background="White">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0" Text="Отчеты по учащимся" FontSize="24" FontWeight="Bold" Margin="0,0,0,10"/>
+
+        <!-- Панель фильтров -->
+        <Border Grid.Row="1" Background="#F5F5F5" Padding="15" CornerRadius="5" Margin="0,0,0,15">
+            <WrapPanel>
+                <!-- Поиск студента -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                    <TextBlock Text="Студент:" VerticalAlignment="Center" Margin="0,0,5,0" FontWeight="Bold"/>
+                    <TextBox x:Name="SearchTextBox" 
+                             Width="200" Height="30" 
+                             Padding="5" 
+                             TextChanged="SearchTextBox_TextChanged"
+                             ToolTip="Введите фамилию или телефон студента"/>
+                </StackPanel>
+
+                <!-- Фильтр по группе -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                    <TextBlock Text="Группа:" VerticalAlignment="Center" Margin="0,0,5,0" FontWeight="Bold"/>
+                    <ComboBox x:Name="GroupFilterComboBox" 
+                              Width="150" Height="30"
+                              SelectionChanged="FilterComboBox_SelectionChanged"/>
+                </StackPanel>
+
+                <!-- Фильтр по полу -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                    <TextBlock Text="Пол:" VerticalAlignment="Center" Margin="0,0,5,0" FontWeight="Bold"/>
+                    <ComboBox x:Name="GenderFilterComboBox" 
+                              Width="100" Height="30"
+                              SelectionChanged="FilterComboBox_SelectionChanged"/>
+                </StackPanel>
+
+                <!-- Фильтр по возрасту -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                    <TextBlock Text="Возраст:" VerticalAlignment="Center" Margin="0,0,5,0" FontWeight="Bold"/>
+                    <ComboBox x:Name="AgeFilterComboBox" 
+                              Width="120" Height="30"
+                              SelectionChanged="FilterComboBox_SelectionChanged"/>
+                </StackPanel>
+
+                <!-- Фильтр по статусу оплаты -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                    <TextBlock Text="Оплата:" VerticalAlignment="Center" Margin="0,0,5,0" FontWeight="Bold"/>
+                    <ComboBox x:Name="PaymentStatusComboBox" 
+                              Width="150" Height="30"
+                              SelectionChanged="PaymentStatusComboBox_SelectionChanged"/>
+                </StackPanel>
+
+                <!-- Кнопка обновить -->
+                <Button x:Name="RefreshButton" 
+                        Content="🔄 Обновить" 
+                        Click="RefreshButton_Click"
+                        Width="100" Height="35" 
+                        Background="#607D8B" Foreground="White"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Результаты поиска студентов -->
+        <ListBox x:Name="SearchResultsListBox" 
+                 Grid.Row="2" 
+                 MaxHeight="150"
+                 Margin="10,0,0,10"
+                 Visibility="Collapsed"
+                 DisplayMemberPath="FullName"
+                 SelectionChanged="SearchResultsListBox_SelectionChanged"
+                 Background="White" BorderBrush="#CCCCCC"/>
+
+        <!-- Выбранный студент -->
+        <Border x:Name="SelectedStudentPanel" 
+                Grid.Row="2" 
+                Background="#E3F2FD" 
+                Padding="10" 
+                CornerRadius="5" 
+                Margin="0,0,0,10"
+                Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock x:Name="SelectedStudentText" FontWeight="Bold" FontSize="14"/>
+                <TextBlock x:Name="SelectedStudentDetails" FontSize="12" Foreground="#666666" Margin="0,5,0,0"/>
+                <Button x:Name="ClearSelectedStudentButton" 
+                        Content="✕ Очистить выбор" 
+                        Click="ClearSelectedStudent_Click"
+                        Width="120" Height="25" 
+                        Background="#f44336" Foreground="White"
+                        FontSize="11" Margin="0,5,0,0" HorizontalAlignment="Left"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Основной контент с вкладками -->
+        <TabControl Grid.Row="3">
+            <!-- Вкладка Общая статистика -->
+            <TabItem Header="Общая статистика">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <!-- Карточки с общей статистикой -->
+                        <WrapPanel Margin="0,0,0,15">
+                            <Border Background="#E8F5E8" Padding="15" CornerRadius="5" Width="180" Margin="0,0,10,10">
+                                <StackPanel>
+                                    <TextBlock Text="Всего учащихся" FontSize="12" Foreground="#2E7D32"/>
+                                    <TextBlock x:Name="TotalStudentsText" Text="0" FontSize="28" FontWeight="Bold" Foreground="#2E7D32"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#E3F2FD" Padding="15" CornerRadius="5" Width="180" Margin="0,0,10,10">
+                                <StackPanel>
+                                    <TextBlock Text="Мужчины" FontSize="12" Foreground="#0D47A1"/>
+                                    <TextBlock x:Name="MaleCountText" Text="0" FontSize="28" FontWeight="Bold" Foreground="#0D47A1"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FCE4EC" Padding="15" CornerRadius="5" Width="180" Margin="0,0,10,10">
+                                <StackPanel>
+                                    <TextBlock Text="Женщины" FontSize="12" Foreground="#880E4F"/>
+                                    <TextBlock x:Name="FemaleCountText" Text="0" FontSize="28" FontWeight="Bold" Foreground="#880E4F"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FFF3E0" Padding="15" CornerRadius="5" Width="180" Margin="0,0,10,10">
+                                <StackPanel>
+                                    <TextBlock Text="Средний возраст" FontSize="12" Foreground="#E65100"/>
+                                    <TextBlock x:Name="AverageAgeText" Text="0" FontSize="28" FontWeight="Bold" Foreground="#E65100"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#F3E5F5" Padding="15" CornerRadius="5" Width="180" Margin="0,0,10,10">
+                                <StackPanel>
+                                    <TextBlock Text="С документами" FontSize="12" Foreground="#4A148C"/>
+                                    <TextBlock x:Name="WithDocumentsText" Text="0" FontSize="28" FontWeight="Bold" Foreground="#4A148C"/>
+                                </StackPanel>
+                            </Border>
+                        </WrapPanel>
+
+                        <!-- Демографическая статистика -->
+                        <GroupBox Header="Демографическая статистика" Margin="0,0,0,15">
+                            <DataGrid x:Name="DemographicsDataGrid" 
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      Height="200"
+                                      Margin="5">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Возрастная группа" Binding="{Binding ВозрастнаяГруппа}" Width="150"/>
+                                    <DataGridTextColumn Header="Количество" Binding="{Binding Количество}" Width="100"/>
+                                    <DataGridTextColumn Header="Мужчины" Binding="{Binding Мужчины}" Width="100"/>
+                                    <DataGridTextColumn Header="Женщины" Binding="{Binding Женщины}" Width="100"/>
+                                    <DataGridTextColumn Header="Процент" Binding="{Binding Процент}" Width="100"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+
+                        <!-- Статистика по группам -->
+                        <GroupBox Header="Статистика по группам" Margin="0,0,0,15">
+                            <DataGrid x:Name="GroupsDataGrid" 
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      Height="200"
+                                      Margin="5">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Группа" Binding="{Binding Группа}" Width="150"/>
+                                    <DataGridTextColumn Header="Студентов" Binding="{Binding КоличествоСтудентов}" Width="80"/>
+                                    <DataGridTextColumn Header="Статус" Binding="{Binding СтатусГруппы}" Width="100"/>
+                                    <DataGridTextColumn Header="Мужчины" Binding="{Binding Мужчины}" Width="70"/>
+                                    <DataGridTextColumn Header="Женщины" Binding="{Binding Женщины}" Width="70"/>
+                                    <DataGridTextColumn Header="Ср. возраст" Binding="{Binding СреднийВозраст}" Width="80"/>
+                                    <DataGridTextColumn Header="Начало" Binding="{Binding НачалоОбучения}" Width="90"/>
+                                    <DataGridTextColumn Header="Окончание" Binding="{Binding КонецОбучения}" Width="90"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Вкладка Документы -->
+            <TabItem Header="Документы">
+                <Grid Margin="10">
+                    <DataGrid x:Name="DocumentsDataGrid" 
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ФИО" Binding="{Binding ФИО}" Width="200"/>
+                            <DataGridTextColumn Header="Группа" Binding="{Binding Группа}" Width="100"/>
+                            <DataGridTemplateColumn Header="Паспорт" Width="60">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Паспорт}" FontSize="16" HorizontalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="СНИЛС" Width="60">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding СНИЛС}" FontSize="16" HorizontalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Мед. справка" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding МедСправка}" FontSize="16" HorizontalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Адрес" Width="60">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Адрес}" FontSize="16" HorizontalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding Статус}" Width="150"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Оплаты -->
+            <TabItem Header="Оплаты">
+                <Grid Margin="10">
+                    <DataGrid x:Name="PaymentsDataGrid" 
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ФИО" Binding="{Binding ФИО}" Width="200"/>
+                            <DataGridTextColumn Header="Группа" Binding="{Binding Группа}" Width="100"/>
+                            <DataGridTextColumn Header="К оплате" Binding="{Binding ВсегоКОплате}" Width="120"/>
+                            <DataGridTextColumn Header="Оплачено" Binding="{Binding Оплачено}" Width="120"/>
+                            <DataGridTextColumn Header="Задолженность" Binding="{Binding Задолженность}" Width="120"/>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding СтатусОплаты}" Width="120"/>
+                            <DataGridTextColumn Header="Последняя оплата" Binding="{Binding ПоследняяОплата}" Width="120"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка Длительность обучения -->
+            <TabItem Header="Длительность обучения">
+                <Grid Margin="10">
+                    <DataGrid x:Name="DurationDataGrid" 
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ФИО" Binding="{Binding ФИО}" Width="200"/>
+                            <DataGridTextColumn Header="Группа" Binding="{Binding Группа}" Width="100"/>
+                            <DataGridTextColumn Header="Начало" Binding="{Binding НачалоОбучения}" Width="100"/>
+                            <DataGridTextColumn Header="Окончание" Binding="{Binding КонецОбучения}" Width="100"/>
+                            <DataGridTextColumn Header="Продолжительность" Binding="{Binding Продолжительность}" Width="150"/>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding Статус}" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Page>

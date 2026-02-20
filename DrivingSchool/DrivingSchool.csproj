@@ -36,6 +36,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Configuration.ConfigurationManager, Version=10.0.0.3, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Configuration.ConfigurationManager.10.0.3\lib\net462\System.Configuration.ConfigurationManager.dll</HintPath>
+    </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
     <Reference Include="Microsoft.CSharp" />
@@ -55,6 +59,115 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="DrivingSchoolDBDataSet.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>DrivingSchoolDBDataSet.xsd</DependentUpon>
+    </Compile>
+    <Compile Include="Views\FinancialReportsPage.xaml.cs">
+      <DependentUpon>FinancialReportsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Models\DocumentTemplate.cs" />
+    <Compile Include="Models\Employee.cs" />
+    <Compile Include="Models\GeneratedDocument.cs" />
+    <Compile Include="Models\Payment.cs" />
+    <Compile Include="Models\StudentCertificate.cs" />
+    <Compile Include="Models\StudentDrivingLicense.cs" />
+    <Compile Include="Models\StudentMedicalCertificate.cs" />
+    <Compile Include="Models\StudentPassportData.cs" />
+    <Compile Include="Models\StudentRegistrationAddress.cs" />
+    <Compile Include="Models\StudentSNILS.cs" />
+    <Compile Include="Models\StudentTuition.cs" />
+    <Compile Include="Models\StudyGroup.cs" />
+    <Compile Include="Models\Tariff.cs" />
+    <Compile Include="Models\User.cs" />
+    <Compile Include="Services\SqlDataService.cs" />
+    <Compile Include="Views\AddressDataPage.xaml.cs">
+      <DependentUpon>AddressDataPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\AddressEditDialog.xaml.cs">
+      <DependentUpon>AddressEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\BasePage.cs" />
+    <Compile Include="Views\CarEditDialog.xaml.cs">
+      <DependentUpon>CarEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CarsPage.xaml.cs">
+      <DependentUpon>CarsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CategoriesPage.xaml.cs">
+      <DependentUpon>CategoriesPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CategoryEditDialog.xaml.cs">
+      <DependentUpon>CategoryEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CertificateDataPage.xaml.cs">
+      <DependentUpon>CertificateDataPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CertificateEditDialog.xaml.cs">
+      <DependentUpon>CertificateEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\DrivingLicenseDataPage.xaml.cs">
+      <DependentUpon>DrivingLicenseDataPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\DrivingLicenseEditDialog.xaml.cs">
+      <DependentUpon>DrivingLicenseEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\EmployeeEditDialog.xaml.cs">
+      <DependentUpon>EmployeeEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\EmployeesPage.xaml.cs">
+      <DependentUpon>EmployeesPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\GroupEditDialog.xaml.cs">
+      <DependentUpon>GroupEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\GroupsPage.xaml.cs">
+      <DependentUpon>GroupsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\MedicalEditDialog.xaml.cs">
+      <DependentUpon>MedicalEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\MedicalPage.xaml.cs">
+      <DependentUpon>MedicalPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\PassportDataPage.xaml.cs">
+      <DependentUpon>PassportDataPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\PassportEditDialog.xaml.cs">
+      <DependentUpon>PassportEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\PaymentEditDialog.xaml.cs">
+      <DependentUpon>PaymentEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\PaymentsPage.xaml.cs">
+      <DependentUpon>PaymentsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SNILSEditDialog.xaml.cs">
+      <DependentUpon>SNILSEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SNILSPage.xaml.cs">
+      <DependentUpon>SNILSPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\StudentEditDialog.xaml.cs">
+      <DependentUpon>StudentEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\StudentReportsPage.xaml.cs">
+      <DependentUpon>StudentReportsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\StudentsPage.xaml.cs">
+      <DependentUpon>StudentsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\TariffEditDialog.xaml.cs">
+      <DependentUpon>TariffEditDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\TariffsPage.xaml.cs">
+      <DependentUpon>TariffsPage.xaml</DependentUpon>
+    </Compile>
+    <Page Include="Views\FinancialReportsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -67,8 +180,119 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="Views\AddressDataPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\AddressEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\CarEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\CarsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\CategoriesPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\CategoryEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\CertificateDataPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\CertificateEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\DrivingLicenseDataPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\DrivingLicenseEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\EmployeeEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\EmployeesPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\GroupEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\GroupsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\MedicalEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\MedicalPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\PassportDataPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\PassportEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\PaymentEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\PaymentsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\SNILSEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\SNILSPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\StudentEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\StudentReportsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\StudentsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\TariffEditDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\TariffsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Models\Car.cs" />
+    <Compile Include="Models\Student.cs" />
+    <Compile Include="Models\VehicleCategory.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -86,6 +310,18 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+    <None Include="DrivingSchoolDBDataSet.xsc">
+      <DependentUpon>DrivingSchoolDBDataSet.xsd</DependentUpon>
+    </None>
+    <None Include="DrivingSchoolDBDataSet.xsd">
+      <Generator>MSDataSetGenerator</Generator>
+      <LastGenOutput>DrivingSchoolDBDataSet.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="DrivingSchoolDBDataSet.xss">
+      <DependentUpon>DrivingSchoolDBDataSet.xsd</DependentUpon>
+    </None>
+    <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>

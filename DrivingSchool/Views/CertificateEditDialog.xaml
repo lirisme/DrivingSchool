@@ -1,0 +1,91 @@
+﻿<Window x:Class="DrivingSchool.Views.CertificateEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Редактирование свидетельства" 
+        Height="400" 
+        Width="550"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="120"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" 
+                   Text="{Binding Title, RelativeSource={RelativeSource FindAncestor, AncestorType=Window}}"
+                   FontSize="16" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <!-- Студент -->
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Студент:" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="StudentNameTextBox" Grid.Row="1" Grid.Column="1" 
+                 IsReadOnly="True" Background="#F0F0F0"
+                 Margin="0,5" Padding="5"/>
+
+        <!-- Серия свидетельства -->
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="Серия:*" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="SeriesTextBox" Grid.Row="2" Grid.Column="1" 
+                 Text="{Binding CertificateSeries, UpdateSourceTrigger=PropertyChanged}" 
+                 Margin="0,5" Padding="5" MaxLength="10"/>
+
+        <!-- Номер свидетельства -->
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Номер:*" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="NumberTextBox" Grid.Row="3" Grid.Column="1" 
+                 Text="{Binding CertificateNumber, UpdateSourceTrigger=PropertyChanged}" 
+                 Margin="0,5" Padding="5" MaxLength="10"/>
+
+        <!-- Дата выдачи -->
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="Дата выдачи:*" VerticalAlignment="Center" Margin="0,5"/>
+        <DatePicker x:Name="IssueDatePicker" Grid.Row="4" Grid.Column="1" 
+                    SelectedDate="{Binding IssueDate}"
+                    Margin="0,5" Padding="5" Height="30"/>
+
+        <!-- Категория -->
+        <TextBlock Grid.Row="5" Grid.Column="0" Text="Категория:*" VerticalAlignment="Center" Margin="0,5"/>
+        <ComboBox x:Name="CategoryComboBox" Grid.Row="5" Grid.Column="1" 
+                  DisplayMemberPath="DisplayText" SelectedValuePath="Id"
+                  SelectedValue="{Binding VehicleCategoryId}"
+                  Margin="0,5" Padding="5" Height="30"/>
+
+        <!-- Информация -->
+        <Border Grid.Row="6" Grid.ColumnSpan="2" Background="#E3F2FD" Padding="10" CornerRadius="5" Margin="0,10">
+            <TextBlock x:Name="InfoTextBlock" 
+                       Text="Свидетельство об окончании выдается после успешной сдачи экзаменов"
+                       Foreground="#0D47A1" FontSize="11" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="9" Grid.ColumnSpan="2" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right" 
+                    Margin="0,20,0,0">
+            <Button Content="Сохранить" 
+                    Click="SaveButton_Click" 
+                    Width="100" Height="35" 
+                    Background="#4CAF50" Foreground="White"
+                    Margin="0,0,10,0"/>
+            <Button Content="Отмена" 
+                    Click="CancelButton_Click" 
+                    Width="100" Height="35" 
+                    Background="#f44336" Foreground="White"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="* - обязательные поля" 
+                   Foreground="Gray" FontSize="11" HorizontalAlignment="Right" Margin="0,0,0,20"/>
+    </Grid>
+</Window>
