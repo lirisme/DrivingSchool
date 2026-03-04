@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using DrivingSchool.Models;
 using DrivingSchool.Services;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace DrivingSchool.Views
 {
@@ -25,96 +27,126 @@ namespace DrivingSchool.Views
         {
             try
             {
-                _students = _dataService.LoadStudents();
-                // TODO: LoadPassportData нужно добавить в SqlDataService
-                _passports = new StudentPassportDataCollection { Passports = new System.Collections.Generic.List<StudentPassportData>() };
+                Debug.WriteLine("=== ЗАГРУЗКА ДАННЫХ ===");
 
-                // Пока заглушка
-                // _passports = _dataService.LoadPassportData();
+                _students = _dataService.LoadStudents() ?? new StudentCollection { Students = new List<Student>() };
+                Debug.WriteLine($"Загружено студентов: {_students.Students.Count}");
+
+                _passports = _dataService.LoadPassportData() ?? new StudentPassportDataCollection { Passports = new List<StudentPassportData>() };
+                Debug.WriteLine($"Загружено паспортов: {_passports.Passports.Count}");
 
                 ApplyFilter();
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА загрузки данных: {ex.Message}");
                 MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
-                _students = new StudentCollection { Students = new System.Collections.Generic.List<Student>() };
-                _passports = new StudentPassportDataCollection { Passports = new System.Collections.Generic.List<StudentPassportData>() };
+                _students = new StudentCollection { Students = new List<Student>() };
+                _passports = new StudentPassportDataCollection { Passports = new List<StudentPassportData>() };
             }
         }
 
         private void ApplyFilter()
         {
-            if (_selectedStudent != null)
+            try
             {
-                var filtered = _passports.Passports
-                    .Where(p => p.StudentId == _selectedStudent.Id)
-                    .Select(p =>
-                    {
-                        p.StudentName = _selectedStudent.FullName;
-                        return p;
-                    })
-                    .ToList();
+                Debug.WriteLine("=== ПРИМЕНЕНИЕ ФИЛЬТРА ===");
 
-                PassportGrid.ItemsSource = filtered;
-
-                if (filtered.Any())
+                if (_selectedStudent != null)
                 {
-                    InfoTextBlock.Text = $"Паспортные данные студента {_selectedStudent.FullName}";
+                    Debug.WriteLine($"Выбран студент ID={_selectedStudent.Id}, Name={_selectedStudent.FullName}");
+
+                    var filtered = _passports.Passports
+                        .Where(p => p.StudentId == _selectedStudent.Id)
+                        .Select(p =>
+                        {
+                            p.StudentName = _selectedStudent.FullName;
+                            return p;
+                        })
+                        .ToList();
+
+                    Debug.WriteLine($"Найдено паспортов для студента: {filtered.Count}");
+
+                    // Выводим все найденные паспорта в отладку
+                    foreach (var p in filtered)
+                    {
+                        Debug.WriteLine($"  Паспорт ID={p.Id}, Серия={p.Series}, Номер={p.Number}");
+                    }
+
+                    PassportGrid.ItemsSource = filtered;
+
+                    if (filtered.Any())
+                    {
+                        InfoTextBlock.Text = $"Паспортные данные студента {_selectedStudent.FullName}";
+                    }
+                    else
+                    {
+                        InfoTextBlock.Text = $"У студента {_selectedStudent.FullName} нет паспортных данных";
+                    }
                 }
                 else
                 {
-                    InfoTextBlock.Text = $"У студента {_selectedStudent.FullName} нет паспортных данных";
+                    Debug.WriteLine("Студент не выбран, показываем все паспорта");
+
+                    var allPassports = _passports.Passports
+                        .Select(p =>
+                        {
+                            p.StudentName = GetStudentName(p.StudentId);
+                            return p;
+                        })
+                        .ToList();
+
+                    PassportGrid.ItemsSource = allPassports;
+                    InfoTextBlock.Text = $"Всего записей: {_passports.Passports.Count}. Выберите студента для добавления/редактирования";
                 }
+
+                UpdateButtonsAvailability();
             }
-            else
+            catch (Exception ex)
             {
-                var allPassports = _passports.Passports
-                    .Select(p =>
-                    {
-                        p.StudentName = GetStudentName(p.StudentId);
-                        return p;
-                    })
-                    .ToList();
-
-                PassportGrid.ItemsSource = allPassports;
-                InfoTextBlock.Text = $"Всего записей: {_passports.Passports.Count}. Выберите студента для добавления/редактирования";
+                Debug.WriteLine($"ОШИБКА в ApplyFilter: {ex.Message}");
             }
-
-            UpdateButtonsAvailability();
         }
 
         private string GetStudentName(int studentId)
         {
-            var student = _students.Students.FirstOrDefault(s => s.Id == studentId);
+            var student = _students?.Students?.FirstOrDefault(s => s.Id == studentId);
             return student?.FullName ?? "Неизвестный студент";
         }
 
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var searchText = SearchTextBox.Text?.ToLower() ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(searchText))
+            try
             {
-                SearchResultsListBox.Visibility = Visibility.Collapsed;
-                return;
+                var searchText = SearchTextBox.Text?.ToLower() ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(searchText))
+                {
+                    SearchResultsListBox.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                var results = _students?.Students?
+                    .Where(s => (s.LastName ?? "").ToLower().Contains(searchText) ||
+                               (s.FirstName ?? "").ToLower().Contains(searchText) ||
+                               (s.Phone ?? "").Contains(searchText))
+                    .Take(10)
+                    .ToList() ?? new List<Student>();
+
+                if (results.Any())
+                {
+                    SearchResultsListBox.ItemsSource = results;
+                    SearchResultsListBox.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    SearchResultsListBox.Visibility = Visibility.Collapsed;
+                }
             }
-
-            var results = _students.Students
-                .Where(s => (s.LastName ?? "").ToLower().Contains(searchText) ||
-                           (s.FirstName ?? "").ToLower().Contains(searchText) ||
-                           (s.Phone ?? "").Contains(searchText))
-                .Take(10)
-                .ToList();
-
-            if (results.Any())
+            catch (Exception ex)
             {
-                SearchResultsListBox.ItemsSource = results;
-                SearchResultsListBox.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                SearchResultsListBox.Visibility = Visibility.Collapsed;
+                Debug.WriteLine($"Ошибка поиска: {ex.Message}");
             }
         }
 
@@ -146,14 +178,31 @@ namespace DrivingSchool.Views
 
         private void UpdateButtonsAvailability()
         {
-            var hasStudent = _selectedStudent != null;
-            var hasPassportData = hasStudent && _passports.Passports.Any(p => p.StudentId == _selectedStudent.Id);
-            var hasSelection = PassportGrid.SelectedItem != null;
+            try
+            {
+                var hasStudent = _selectedStudent != null;
 
-            AddPassportButton.IsEnabled = hasStudent && !hasPassportData;
-            EditPassportButton.IsEnabled = hasPassportData && hasSelection;
-            DeletePassportButton.IsEnabled = hasPassportData && hasSelection;
-            ViewPassportButton.IsEnabled = hasPassportData && hasSelection;
+                // Проверяем наличие паспортных данных для выбранного студента
+                var hasPassportData = hasStudent && _passports.Passports.Any(p => p.StudentId == _selectedStudent.Id);
+                var hasSelection = PassportGrid.SelectedItem != null;
+
+                Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasPassportData={hasPassportData}, hasSelection={hasSelection}");
+
+                AddPassportButton.IsEnabled = hasStudent && !hasPassportData;
+                EditPassportButton.IsEnabled = hasPassportData && hasSelection;
+                DeletePassportButton.IsEnabled = hasPassportData && hasSelection;
+                ViewPassportButton.IsEnabled = hasPassportData && hasSelection;
+
+                // Визуальная индикация
+                AddPassportButton.Opacity = AddPassportButton.IsEnabled ? 1.0 : 0.5;
+                EditPassportButton.Opacity = EditPassportButton.IsEnabled ? 1.0 : 0.5;
+                DeletePassportButton.Opacity = DeletePassportButton.IsEnabled ? 1.0 : 0.5;
+                ViewPassportButton.Opacity = ViewPassportButton.IsEnabled ? 1.0 : 0.5;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ОШИБКА в UpdateButtonsAvailability: {ex.Message}");
+            }
         }
 
         private void PassportGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -163,21 +212,42 @@ namespace DrivingSchool.Views
 
         private void AddPassport_Click(object sender, RoutedEventArgs e)
         {
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
+                Debug.WriteLine($"Добавление паспорта для студента ID={_selectedStudent.Id}");
+
                 var dialog = new PassportEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    // TODO: Обновить данные
-                    // LoadData();
+                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
+
+                    // Принудительно перезагружаем паспортные данные
+                    _passports = _dataService.LoadPassportData() ?? new StudentPassportDataCollection { Passports = new List<StudentPassportData>() };
+
+                    Debug.WriteLine($"После перезагрузки паспортов: {_passports.Passports.Count}");
+
+                    ApplyFilter();
+
                     MessageBox.Show("Паспортные данные успешно добавлены!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    Debug.WriteLine("Диалог закрыт с Cancel");
                 }
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА при добавлении: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -192,21 +262,36 @@ namespace DrivingSchool.Views
                 return;
             }
 
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
+                Debug.WriteLine($"Редактирование паспорта ID={selectedPassport.Id}");
+
                 var dialog = new PassportEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedPassport);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    // TODO: Обновить данные
-                    // LoadData();
+                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
+
+                    // Принудительно перезагружаем паспортные данные
+                    _passports = _dataService.LoadPassportData() ?? new StudentPassportDataCollection { Passports = new List<StudentPassportData>() };
+
+                    ApplyFilter();
+
                     MessageBox.Show("Паспортные данные успешно обновлены!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА при редактировании: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -221,19 +306,33 @@ namespace DrivingSchool.Views
                 return;
             }
 
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             if (MessageBox.Show($"Удалить паспортные данные студента {_selectedStudent.FullName}?",
                 "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
                 try
                 {
-                    // TODO: Удалить через сервис
-                    // _dataService.DeletePassportData(selectedPassport.Id);
+                    Debug.WriteLine($"Удаление паспорта ID={selectedPassport.Id}");
+
+                    _dataService.DeletePassportData(selectedPassport.Id);
+
+                    // Принудительно перезагружаем паспортные данные
+                    _passports = _dataService.LoadPassportData() ?? new StudentPassportDataCollection { Passports = new List<StudentPassportData>() };
+
+                    ApplyFilter();
 
                     MessageBox.Show("Паспортные данные удалены.", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
+                    Debug.WriteLine($"ОШИБКА при удалении: {ex.Message}");
                     MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -245,6 +344,13 @@ namespace DrivingSchool.Views
             if (!(PassportGrid.SelectedItem is StudentPassportData selectedPassport))
             {
                 MessageBox.Show("Выберите запись для просмотра", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -267,6 +373,13 @@ namespace DrivingSchool.Views
         {
             SearchTextBox.Text = string.Empty;
             SearchResultsListBox.Visibility = Visibility.Collapsed;
+        }
+
+        private void ClearSelectedStudent_Click(object sender, RoutedEventArgs e)
+        {
+            _selectedStudent = null;
+            SelectedStudentPanel.Visibility = Visibility.Collapsed;
+            ApplyFilter();
         }
 
         private void PassportGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)

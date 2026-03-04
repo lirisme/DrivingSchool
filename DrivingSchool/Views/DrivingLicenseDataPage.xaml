@@ -7,10 +7,17 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <!-- 0: Заголовок -->
             <RowDefinition Height="Auto"/>
+            <!-- 1: Панель поиска -->
             <RowDefinition Height="Auto"/>
+            <!-- 2: Результаты поиска + Выбранный студент (ОДНА СТРОКА) -->
+            <RowDefinition Height="Auto"/>
+            <!-- 3: Панель кнопок -->
             <RowDefinition Height="*"/>
+            <!-- 4: Таблица -->
             <RowDefinition Height="Auto"/>
+            <!-- 5: Инфо панель -->
         </Grid.RowDefinitions>
 
         <!-- Заголовок -->
@@ -30,33 +37,49 @@
                     Width="30" Height="30" 
                     Click="ClearSearch_Click"
                     Margin="5,0,0,0"/>
+
+            <Button x:Name="ClearSelectedStudentButton" 
+                    Content="❌ Сбросить выбор" 
+                    Width="120" Height="30" 
+                    Click="ClearSelectedStudent_Click"
+                    Margin="5,0,0,0"
+                    Background="#FF9800" 
+                    Foreground="White"
+                    ToolTip="Сбросить выбранного студента"/>
         </StackPanel>
 
-        <!-- Результаты поиска студентов -->
-        <ListBox x:Name="SearchResultsListBox" 
-                 Grid.Row="2" 
-                 MaxHeight="150"
-                 Margin="130,0,0,10"
-                 Visibility="Collapsed"
-                 DisplayMemberPath="FullName"
-                 SelectionChanged="SearchResultsListBox_SelectionChanged"
-                 Background="White" BorderBrush="#CCCCCC"/>
+        <!-- Результаты поиска студентов и выбранный студент (В ОДНОЙ СТРОКЕ КАК В ПАСПОРТАХ) -->
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <!-- Выбранный студент -->
-        <Border x:Name="SelectedStudentPanel" 
-                Grid.Row="2" 
-                Background="#E3F2FD" 
-                Padding="10" 
-                CornerRadius="5" 
-                Margin="0,0,0,10"
-                Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="SelectedStudentText" FontWeight="Bold" FontSize="14"/>
-                <TextBlock x:Name="SelectedStudentDetails" FontSize="12" Foreground="#666666" Margin="0,5,0,0"/>
-            </StackPanel>
-        </Border>
+            <!-- Результаты поиска -->
+            <ListBox x:Name="SearchResultsListBox" 
+                     Grid.Row="0"
+                     MaxHeight="150"
+                     Margin="130,0,0,5"
+                     Visibility="Collapsed"
+                     DisplayMemberPath="FullName"
+                     SelectionChanged="SearchResultsListBox_SelectionChanged"
+                     Background="White" BorderBrush="#CCCCCC"/>
 
-        <!-- Панель кнопок -->
+            <!-- Выбранный студент -->
+            <Border x:Name="SelectedStudentPanel" 
+                    Grid.Row="1"
+                    Background="#E3F2FD" 
+                    Padding="10" 
+                    CornerRadius="5" 
+                    Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="SelectedStudentText" FontWeight="Bold" FontSize="14"/>
+                    <TextBlock x:Name="SelectedStudentDetails" FontSize="12" Foreground="#666666" Margin="0,5,0,0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Панель кнопок - Row 3 -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,10" HorizontalAlignment="Right">
             <Button x:Name="AddLicenseButton" 
                     Content="➕ Добавить удостоверение" 
@@ -94,7 +117,7 @@
                     IsEnabled="False"/>
         </StackPanel>
 
-        <!-- Таблица с удостоверениями -->
+        <!-- Таблица с удостоверениями - Row 4 -->
         <DataGrid x:Name="LicenseGrid" 
                   Grid.Row="4"
                   AutoGenerateColumns="False"
@@ -109,24 +132,17 @@
                 <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="180"/>
                 <DataGridTextColumn Header="Серия" Binding="{Binding Series}" Width="80"/>
                 <DataGridTextColumn Header="Номер" Binding="{Binding Number}" Width="100"/>
-                <DataGridTextColumn Header="Категории" Binding="{Binding CategoriesDisplay}" Width="120"/>
+                <DataGridTextColumn Header="Категории" Binding="{Binding LicenseCateg}" Width="120"/>
                 <DataGridTextColumn Header="Кем выдан" Binding="{Binding IssuedBy}" Width="200"/>
                 <DataGridTextColumn Header="Код подразделения" Binding="{Binding DivisionCode}" Width="120"/>
                 <DataGridTextColumn Header="Дата выдачи" Binding="{Binding IssueDate, StringFormat={}{0:dd.MM.yyyy}}" Width="100"/>
                 <DataGridTextColumn Header="Действительно до" Binding="{Binding ExpiryDate, StringFormat={}{0:dd.MM.yyyy}}" Width="110"/>
-                <DataGridTemplateColumn Header="Статус" Width="100">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StatusText}" 
-                                       Foreground="{Binding StatusColor}"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="100"/>
                 <DataGridTextColumn Header="Стаж" Binding="{Binding ExperienceYears}" Width="60"/>
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- Информационная панель -->
+        <!-- Информационная панель - Row 5 -->
         <Border Grid.Row="5" Background="#F0F8FF" Padding="10" CornerRadius="5">
             <TextBlock x:Name="InfoTextBlock" Text="Выберите студента для работы с водительскими удостоверениями" 
                       FontStyle="Italic" Foreground="#666666"/>

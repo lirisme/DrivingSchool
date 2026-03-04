@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using DrivingSchool.Models;
 using DrivingSchool.Services;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace DrivingSchool.Views
 {
@@ -25,101 +27,132 @@ namespace DrivingSchool.Views
         {
             try
             {
-                _students = _dataService.LoadStudents();
-                // TODO: LoadDrivingLicenses нужно добавить в SqlDataService
-                _licenses = new StudentDrivingLicenseCollection { Licenses = new System.Collections.Generic.List<StudentDrivingLicense>() };
+                Debug.WriteLine("=== ЗАГРУЗКА ВОДИТЕЛЬСКИХ УДОСТОВЕРЕНИЙ ===");
 
-                // Пока заглушка
-                // _licenses = _dataService.LoadDrivingLicenses();
+                _students = _dataService.LoadStudents() ?? new StudentCollection { Students = new List<Student>() };
+                Debug.WriteLine($"Загружено студентов: {_students.Students.Count}");
+
+                // ГЛАВНОЕ ИСПРАВЛЕНИЕ: УБРАЛИ ЗАГЛУШКУ, ЗАГРУЖАЕМ РЕАЛЬНЫЕ ДАННЫЕ!
+                _licenses = _dataService.LoadDrivingLicenses() ?? new StudentDrivingLicenseCollection { Licenses = new List<StudentDrivingLicense>() };
+                Debug.WriteLine($"Загружено удостоверений: {_licenses.Licenses.Count}");
+
+                // Отладка: выводим все загруженные удостоверения
+                foreach (var license in _licenses.Licenses)
+                {
+                    Debug.WriteLine($"  Удостоверение ID={license.Id}, Студент ID={license.StudentId}, Серия={license.Series}, Номер={license.Number}");
+                }
 
                 ApplyFilter();
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА загрузки данных: {ex.Message}");
                 MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
-                _students = new StudentCollection { Students = new System.Collections.Generic.List<Student>() };
-                _licenses = new StudentDrivingLicenseCollection { Licenses = new System.Collections.Generic.List<StudentDrivingLicense>() };
+                _students = new StudentCollection { Students = new List<Student>() };
+                _licenses = new StudentDrivingLicenseCollection { Licenses = new List<StudentDrivingLicense>() };
             }
         }
 
         private void ApplyFilter()
         {
-            if (_selectedStudent != null)
+            try
             {
-                var filtered = _licenses.Licenses
-                    .Where(l => l.StudentId == _selectedStudent.Id)
-                    .Select(l =>
-                    {
-                        l.StudentName = _selectedStudent.FullName;
-                        return l;
-                    })
-                    .ToList();
+                Debug.WriteLine("=== ПРИМЕНЕНИЕ ФИЛЬТРА ===");
 
-                LicenseGrid.ItemsSource = filtered;
-
-                if (filtered.Any())
+                if (_selectedStudent != null)
                 {
-                    var validCount = filtered.Count(l => l.IsValid);
-                    InfoTextBlock.Text = $"Водительские удостоверения студента {_selectedStudent.FullName} (действительных: {validCount})";
+                    Debug.WriteLine($"Выбран студент ID={_selectedStudent.Id}, Name={_selectedStudent.FullName}");
+
+                    var filtered = _licenses.Licenses
+                        .Where(l => l.StudentId == _selectedStudent.Id)
+                        .Select(l =>
+                        {
+                            l.StudentName = _selectedStudent.FullName;
+                            return l;
+                        })
+                        .ToList();
+
+                    Debug.WriteLine($"Найдено удостоверений для студента: {filtered.Count}");
+
+                    LicenseGrid.ItemsSource = filtered;
+
+                    if (filtered.Any())
+                    {
+                        var validCount = filtered.Count(l => l.IsValid);
+                        InfoTextBlock.Text = $"Водительские удостоверения студента {_selectedStudent.FullName} (действительных: {validCount})";
+                    }
+                    else
+                    {
+                        InfoTextBlock.Text = $"У студента {_selectedStudent.FullName} нет водительских удостоверений";
+                    }
                 }
                 else
                 {
-                    InfoTextBlock.Text = $"У студента {_selectedStudent.FullName} нет водительских удостоверений";
+                    Debug.WriteLine("Студент не выбран, показываем все удостоверения");
+
+                    var allLicenses = _licenses.Licenses
+                        .Select(l =>
+                        {
+                            l.StudentName = GetStudentName(l.StudentId);
+                            return l;
+                        })
+                        .ToList();
+
+                    LicenseGrid.ItemsSource = allLicenses;
+
+                    var totalCount = _licenses.Licenses.Count;
+                    var expiredCount = _licenses.Licenses.Count(l => !l.IsValid);
+
+                    InfoTextBlock.Text = $"Всего записей: {totalCount} (просрочено: {expiredCount}). Выберите студента для добавления/редактирования";
                 }
+
+                UpdateButtonsAvailability();
             }
-            else
+            catch (Exception ex)
             {
-                var allLicenses = _licenses.Licenses
-                    .Select(l =>
-                    {
-                        l.StudentName = GetStudentName(l.StudentId);
-                        return l;
-                    })
-                    .ToList();
-
-                LicenseGrid.ItemsSource = allLicenses;
-
-                var totalCount = _licenses.Licenses.Count;
-                var expiredCount = _licenses.Licenses.Count(l => !l.IsValid);
-
-                InfoTextBlock.Text = $"Всего записей: {totalCount} (просрочено: {expiredCount}). Выберите студента для добавления/редактирования";
+                Debug.WriteLine($"ОШИБКА в ApplyFilter: {ex.Message}");
             }
-
-            UpdateButtonsAvailability();
         }
 
         private string GetStudentName(int studentId)
         {
-            var student = _students.Students.FirstOrDefault(s => s.Id == studentId);
+            var student = _students?.Students?.FirstOrDefault(s => s.Id == studentId);
             return student?.FullName ?? "Неизвестный студент";
         }
 
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var searchText = SearchTextBox.Text?.ToLower() ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(searchText))
+            try
             {
-                SearchResultsListBox.Visibility = Visibility.Collapsed;
-                return;
+                var searchText = SearchTextBox.Text?.ToLower() ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(searchText))
+                {
+                    SearchResultsListBox.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                var results = _students?.Students?
+                    .Where(s => (s.LastName ?? "").ToLower().Contains(searchText) ||
+                               (s.FirstName ?? "").ToLower().Contains(searchText) ||
+                               (s.Phone ?? "").Contains(searchText))
+                    .Take(10)
+                    .ToList() ?? new List<Student>();
+
+                if (results.Any())
+                {
+                    SearchResultsListBox.ItemsSource = results;
+                    SearchResultsListBox.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    SearchResultsListBox.Visibility = Visibility.Collapsed;
+                }
             }
-
-            var results = _students.Students
-                .Where(s => (s.LastName ?? "").ToLower().Contains(searchText) ||
-                           (s.FirstName ?? "").ToLower().Contains(searchText) ||
-                           (s.Phone ?? "").Contains(searchText))
-                .Take(10)
-                .ToList();
-
-            if (results.Any())
+            catch (Exception ex)
             {
-                SearchResultsListBox.ItemsSource = results;
-                SearchResultsListBox.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                SearchResultsListBox.Visibility = Visibility.Collapsed;
+                Debug.WriteLine($"Ошибка поиска: {ex.Message}");
             }
         }
 
@@ -151,15 +184,34 @@ namespace DrivingSchool.Views
 
         private void UpdateButtonsAvailability()
         {
-            var hasStudent = _selectedStudent != null;
-            var hasLicense = hasStudent && _licenses.Licenses.Any(l => l.StudentId == _selectedStudent.Id);
-            var hasSelection = LicenseGrid.SelectedItem != null;
+            try
+            {
+                var hasStudent = _selectedStudent != null;
 
-            AddLicenseButton.IsEnabled = hasStudent && !hasLicense;
-            EditLicenseButton.IsEnabled = hasLicense && hasSelection;
-            DeleteLicenseButton.IsEnabled = hasLicense && hasSelection;
-            ViewLicenseButton.IsEnabled = hasLicense && hasSelection;
-            PrintLicenseButton.IsEnabled = hasLicense && hasSelection;
+                // Проверяем наличие удостоверения для выбранного студента
+                var hasLicense = hasStudent && _licenses.Licenses.Any(l => l.StudentId == _selectedStudent.Id);
+                var hasSelection = LicenseGrid.SelectedItem != null;
+
+                Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasLicense={hasLicense}, hasSelection={hasSelection}");
+
+                // ИСПРАВЛЕНИЕ: как в паспортах - только одно удостоверение на студента!
+                AddLicenseButton.IsEnabled = hasStudent && !hasLicense;  // Можно добавить только если нет
+                EditLicenseButton.IsEnabled = hasLicense && hasSelection;
+                DeleteLicenseButton.IsEnabled = hasLicense && hasSelection;
+                ViewLicenseButton.IsEnabled = hasLicense && hasSelection;
+                PrintLicenseButton.IsEnabled = hasLicense && hasSelection;
+
+                // Визуальная индикация
+                AddLicenseButton.Opacity = AddLicenseButton.IsEnabled ? 1.0 : 0.5;
+                EditLicenseButton.Opacity = EditLicenseButton.IsEnabled ? 1.0 : 0.5;
+                DeleteLicenseButton.Opacity = DeleteLicenseButton.IsEnabled ? 1.0 : 0.5;
+                ViewLicenseButton.Opacity = ViewLicenseButton.IsEnabled ? 1.0 : 0.5;
+                PrintLicenseButton.Opacity = PrintLicenseButton.IsEnabled ? 1.0 : 0.5;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ОШИБКА в UpdateButtonsAvailability: {ex.Message}");
+            }
         }
 
         private void LicenseGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -169,21 +221,42 @@ namespace DrivingSchool.Views
 
         private void AddLicense_Click(object sender, RoutedEventArgs e)
         {
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
+                Debug.WriteLine($"Добавление удостоверения для студента ID={_selectedStudent.Id}");
+
                 var dialog = new DrivingLicenseEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    // TODO: Обновить данные
-                    // LoadData();
+                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
+
+                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
+                    _licenses = _dataService.LoadDrivingLicenses() ?? new StudentDrivingLicenseCollection { Licenses = new List<StudentDrivingLicense>() };
+
+                    Debug.WriteLine($"После перезагрузки удостоверений: {_licenses.Licenses.Count}");
+
+                    ApplyFilter();
+
                     MessageBox.Show("Водительское удостоверение успешно добавлено!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    Debug.WriteLine("Диалог закрыт с Cancel");
                 }
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА при добавлении: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -198,21 +271,36 @@ namespace DrivingSchool.Views
                 return;
             }
 
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
+                Debug.WriteLine($"Редактирование удостоверения ID={selectedLicense.Id}");
+
                 var dialog = new DrivingLicenseEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedLicense);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    // TODO: Обновить данные
-                    // LoadData();
+                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
+
+                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
+                    _licenses = _dataService.LoadDrivingLicenses() ?? new StudentDrivingLicenseCollection { Licenses = new List<StudentDrivingLicense>() };
+
+                    ApplyFilter();
+
                     MessageBox.Show("Водительское удостоверение успешно обновлено!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА при редактировании: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -227,19 +315,33 @@ namespace DrivingSchool.Views
                 return;
             }
 
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             if (MessageBox.Show($"Удалить водительское удостоверение студента {_selectedStudent.FullName}?",
                 "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
                 try
                 {
-                    // TODO: Удалить через сервис
-                    // _dataService.DeleteDrivingLicense(selectedLicense.Id);
+                    Debug.WriteLine($"Удаление удостоверения ID={selectedLicense.Id}");
+
+                    _dataService.DeleteDrivingLicense(selectedLicense.Id);
+
+                    // ИСПРАВЛЕНИЕ: перезагружаем данные после удаления
+                    _licenses = _dataService.LoadDrivingLicenses() ?? new StudentDrivingLicenseCollection { Licenses = new List<StudentDrivingLicense>() };
+
+                    ApplyFilter();
 
                     MessageBox.Show("Водительское удостоверение удалено.", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
+                    Debug.WriteLine($"ОШИБКА при удалении: {ex.Message}");
                     MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -251,6 +353,13 @@ namespace DrivingSchool.Views
             if (!(LicenseGrid.SelectedItem is StudentDrivingLicense selectedLicense))
             {
                 MessageBox.Show("Выберите запись для просмотра", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -285,8 +394,14 @@ namespace DrivingSchool.Views
                 return;
             }
 
-            // TODO: Реализовать печать
-            MessageBox.Show($"Печать водительского удостоверения:\n\n{selectedLicense.Series} {selectedLicense.Number}", "Печать",
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            MessageBox.Show($"Печать водительского удостоверения:\n\n{selectedLicense.Series} {selectedLicense.Number}\nСтудент: {_selectedStudent.FullName}", "Печать",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
@@ -294,6 +409,14 @@ namespace DrivingSchool.Views
         {
             SearchTextBox.Text = string.Empty;
             SearchResultsListBox.Visibility = Visibility.Collapsed;
+        }
+
+        // НОВЫЙ МЕТОД: очистка выбранного студента
+        private void ClearSelectedStudent_Click(object sender, RoutedEventArgs e)
+        {
+            _selectedStudent = null;
+            SelectedStudentPanel.Visibility = Visibility.Collapsed;
+            ApplyFilter();
         }
 
         private void LicenseGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)

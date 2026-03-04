@@ -76,8 +76,8 @@ namespace DrivingSchool.Views
 
             try
             {
-                // Сохраняем через сервис (нужно добавить метод в SqlDataService)
-                // _dataService.SavePassportData(PassportData);
+                // Сохраняем через сервис
+                _dataService.SavePassportData(PassportData);
 
                 DialogResult = true;
                 Close();

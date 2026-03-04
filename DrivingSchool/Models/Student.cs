@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace DrivingSchool.Models
 {
@@ -51,10 +52,51 @@ namespace DrivingSchool.Models
         public string GroupName { get; set; }
         public string InstructorName { get; set; }
         public string CarInfo { get; set; }
+
+        // Свойства для документов (будут заполняться отдельно)
+        public bool HasPassport { get; set; }
+        public bool HasSNILS { get; set; }
+        public bool HasMedical { get; set; }
+        public bool HasAddress { get; set; }
+        public bool HasCertificate { get; set; }
+        public bool HasDrivingLicense { get; set; }
+
+        // Статус документов
+        public string DocumentsStatus
+        {
+            get
+            {
+                var total = 0;
+                if (HasPassport) total++;
+                if (HasSNILS) total++;
+                if (HasMedical) total++;
+                if (HasAddress) total++;
+                if (HasCertificate) total++;
+                if (HasDrivingLicense) total++;
+
+                return $"{total}/6";
+            }
+        }
+
+        public string DocumentsColor
+        {
+            get
+            {
+                var total = 0;
+                if (HasPassport) total++;
+                if (HasSNILS) total++;
+                if (HasMedical) total++;
+                if (HasAddress) total++;
+                if (HasCertificate) total++;
+                if (HasDrivingLicense) total++;
+
+                return total == 6 ? "Green" : total >= 4 ? "Orange" : "Red";
+            }
+        }
     }
 
     public class StudentCollection
     {
-        public System.Collections.Generic.List<Student> Students { get; set; } = new System.Collections.Generic.List<Student>();
+        public List<Student> Students { get; set; } = new List<Student>();
     }
 }

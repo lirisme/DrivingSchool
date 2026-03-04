@@ -50,7 +50,11 @@ namespace DrivingSchool.Views
             if (CertificateData.VehicleCategoryId == 0 && _categories.Categories.Any())
             {
                 CertificateData.VehicleCategoryId = _categories.Categories.First().Id;
-                CertificateData.CategoryCode = _categories.Categories.First().Code;
+            }
+            else
+            {
+                // Выбираем сохраненную категорию
+                CategoryComboBox.SelectedValue = CertificateData.VehicleCategoryId;
             }
         }
 
@@ -89,17 +93,16 @@ namespace DrivingSchool.Views
                 return;
             }
 
-            // Устанавливаем код категории
-            var selectedCategory = _categories.Categories.FirstOrDefault(c => c.Id == CertificateData.VehicleCategoryId);
-            if (selectedCategory != null)
-            {
-                CertificateData.CategoryCode = selectedCategory.Code;
-            }
-
             try
             {
-                // TODO: Сохранить через сервис
-                // _dataService.SaveCertificateData(CertificateData);
+                // Убираем комментарий - ТЕПЕРЬ СОХРАНЯЕМ!
+                int newId = _dataService.SaveCertificateData(CertificateData);
+
+                // Для добавления - обновляем ID
+                if (CertificateData.Id == 0)
+                {
+                    CertificateData.Id = newId;
+                }
 
                 DialogResult = true;
                 Close();

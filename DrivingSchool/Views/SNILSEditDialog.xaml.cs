@@ -89,8 +89,8 @@ namespace DrivingSchool.Views
 
             try
             {
-                // TODO: Сохранить через сервис
-                // _dataService.SaveSNILSData(SNILSData);
+                // ИСПРАВЛЕНИЕ: РАСКОММЕНТИРОВАЛИ СОХРАНЕНИЕ!
+                _dataService.SaveSNILSData(SNILSData);
 
                 DialogResult = true;
                 Close();

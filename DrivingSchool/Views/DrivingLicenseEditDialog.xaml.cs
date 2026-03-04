@@ -1,8 +1,8 @@
-﻿using System;
+﻿using DrivingSchool.Models;
+using DrivingSchool.Services;
+using System;
 using System.Windows;
 using System.Windows.Controls;
-using DrivingSchool.Models;
-using DrivingSchool.Services;
 
 namespace DrivingSchool.Views
 {
@@ -125,8 +125,8 @@ namespace DrivingSchool.Views
 
             try
             {
-                // TODO: Сохранить через сервис
-                // _dataService.SaveDrivingLicense(LicenseData);
+                // ГЛАВНОЕ ИСПРАВЛЕНИЕ: РАСКОММЕНТИРОВАЛИ СОХРАНЕНИЕ!
+                _dataService.SaveDrivingLicense(LicenseData);
 
                 DialogResult = true;
                 Close();

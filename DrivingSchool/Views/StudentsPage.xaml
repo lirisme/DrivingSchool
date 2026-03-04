@@ -92,6 +92,21 @@
                 <DataGridTextColumn Header="Телефон" Binding="{Binding Phone}" Width="120"/>
                 <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="150"/>
                 <DataGridTextColumn Header="Категория" Binding="{Binding CategoryCode}" Width="80"/>
+                <!-- Колонка с документами -->
+                <DataGridTemplateColumn Header="Документы" Width="100">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding DocumentsStatus}" 
+                           FontWeight="Bold"
+                           Foreground="{Binding DocumentsColor}"
+                           Margin="0,0,5,0"
+                           VerticalAlignment="Center"/>
+                                <TextBlock Text="📄" FontSize="14"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Группа" Binding="{Binding GroupName}" Width="100"/>
                 <DataGridTextColumn Header="Инструктор" Binding="{Binding InstructorName}" Width="150"/>
                 <DataGridTextColumn Header="Автомобиль" Binding="{Binding CarInfo}" Width="200"/>

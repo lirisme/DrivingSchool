@@ -1363,67 +1363,67 @@ namespace DrivingSchool.Services
                 return null;
             }
 
-            /// <summary>
-            /// Сохранение паспортных данных
-            /// </summary>
-            public int SavePassportData(StudentPassportData passport)
+        /// <summary>
+        /// Сохранение паспортных данных
+        /// </summary>
+        public int SavePassportData(StudentPassportData passport)
+        {
+            try
             {
-                try
+                using (var conn = GetConnection())
                 {
-                    using (var conn = GetConnection())
-                    {
-                        conn.Open();
+                    conn.Open();
 
-                        if (passport.Id > 0)
-                        {
-                            var cmd = new SqlCommand(@"
+                    if (passport.Id > 0)
+                    {
+                        var cmd = new SqlCommand(@"
                     UPDATE StudentPassportData 
                     SET DocumentType = @DocumentType, Series = @Series, Number = @Number,
                         IssuedBy = @IssuedBy, DivisionCode = @DivisionCode, IssueDate = @IssueDate,
                         ModifiedDate = GETDATE()
                     WHERE Id = @Id", conn);
 
-                            cmd.Parameters.AddWithValue("@Id", passport.Id);
-                            cmd.Parameters.AddWithValue("@DocumentType", passport.DocumentType ?? "");
-                            cmd.Parameters.AddWithValue("@Series", passport.Series ?? "");
-                            cmd.Parameters.AddWithValue("@Number", passport.Number ?? "");
-                            cmd.Parameters.AddWithValue("@IssuedBy", passport.IssuedBy ?? "");
-                            cmd.Parameters.AddWithValue("@DivisionCode", (object)passport.DivisionCode ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@IssueDate", passport.IssueDate);
+                        cmd.Parameters.AddWithValue("@Id", passport.Id);
+                        cmd.Parameters.AddWithValue("@DocumentType", passport.DocumentType ?? "");
+                        cmd.Parameters.AddWithValue("@Series", passport.Series ?? "");
+                        cmd.Parameters.AddWithValue("@Number", passport.Number ?? "");
+                        cmd.Parameters.AddWithValue("@IssuedBy", passport.IssuedBy ?? "");
+                        cmd.Parameters.AddWithValue("@DivisionCode", (object)passport.DivisionCode ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@IssueDate", passport.IssueDate);
 
-                            cmd.ExecuteNonQuery();
-                            return passport.Id;
-                        }
-                        else
-                        {
-                            var cmd = new SqlCommand(@"
+                        cmd.ExecuteNonQuery();
+                        return passport.Id;
+                    }
+                    else
+                    {
+                        var cmd = new SqlCommand(@"
                     INSERT INTO StudentPassportData (StudentId, DocumentType, Series, Number, IssuedBy, DivisionCode, IssueDate, CreatedDate)
                     OUTPUT INSERTED.Id
                     VALUES (@StudentId, @DocumentType, @Series, @Number, @IssuedBy, @DivisionCode, @IssueDate, GETDATE())", conn);
 
-                            cmd.Parameters.AddWithValue("@StudentId", passport.StudentId);
-                            cmd.Parameters.AddWithValue("@DocumentType", passport.DocumentType ?? "");
-                            cmd.Parameters.AddWithValue("@Series", passport.Series ?? "");
-                            cmd.Parameters.AddWithValue("@Number", passport.Number ?? "");
-                            cmd.Parameters.AddWithValue("@IssuedBy", passport.IssuedBy ?? "");
-                            cmd.Parameters.AddWithValue("@DivisionCode", (object)passport.DivisionCode ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@IssueDate", passport.IssueDate);
+                        cmd.Parameters.AddWithValue("@StudentId", passport.StudentId);
+                        cmd.Parameters.AddWithValue("@DocumentType", passport.DocumentType ?? "");
+                        cmd.Parameters.AddWithValue("@Series", passport.Series ?? "");
+                        cmd.Parameters.AddWithValue("@Number", passport.Number ?? "");
+                        cmd.Parameters.AddWithValue("@IssuedBy", passport.IssuedBy ?? "");
+                        cmd.Parameters.AddWithValue("@DivisionCode", (object)passport.DivisionCode ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@IssueDate", passport.IssueDate);
 
-                            return (int)cmd.ExecuteScalar();
-                        }
+                        return (int)cmd.ExecuteScalar();
                     }
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Ошибка сохранения паспортных данных: {ex.Message}");
-                    throw new Exception($"Ошибка сохранения паспортных данных: {ex.Message}");
-                }
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения паспортных данных: {ex.Message}");
+                throw new Exception($"Ошибка сохранения паспортных данных: {ex.Message}");
+            }
+        }
 
-            /// <summary>
-            /// Удаление паспортных данных
-            /// </summary>
-            public void DeletePassportData(int passportId)
+        /// <summary>
+        /// Удаление паспортных данных
+        /// </summary>
+        public void DeletePassportData(int passportId)
             {
                 try
                 {
@@ -2076,66 +2076,66 @@ namespace DrivingSchool.Services
                 return null;
             }
 
-            /// <summary>
-            /// Сохранение свидетельства
-            /// </summary>
-            public int SaveCertificateData(StudentCertificate certificate)
+        /// <summary>
+        /// Сохранение свидетельства - ИСПРАВЛЕНО
+        /// </summary>
+        public int SaveCertificateData(StudentCertificate certificate)
+        {
+            try
             {
-                try
+                using (var conn = GetConnection())
                 {
-                    using (var conn = GetConnection())
+                    conn.Open();
+
+                    if (certificate.Id > 0)
                     {
-                        conn.Open();
-
-                        if (certificate.Id > 0)
-                        {
-                            var cmd = new SqlCommand(@"
+                        var cmd = new SqlCommand(@"
                     UPDATE StudentCertificates 
-                    SET CertificateSeries = @CertificateSeries, CertificateNumber = @CertificateNumber,
-                        IssueDate = @IssueDate, VehicleCategoryId = @VehicleCategoryId,
-                        CategoryCode = @CategoryCode, ModifiedDate = GETDATE()
-                    WHERE Id = @Id", conn);
+                    SET CertificateSeries = @CertificateSeries, 
+                        CertificateNumber = @CertificateNumber,
+                        IssueDate = @IssueDate, 
+                        VehicleCategoryId = @VehicleCategoryId,
+                        ModifiedDate = GETDATE()
+                    WHERE Id = @Id", conn);  // Убрали CategoryCode
 
-                            cmd.Parameters.AddWithValue("@Id", certificate.Id);
-                            cmd.Parameters.AddWithValue("@CertificateSeries", certificate.CertificateSeries ?? "");
-                            cmd.Parameters.AddWithValue("@CertificateNumber", certificate.CertificateNumber ?? "");
-                            cmd.Parameters.AddWithValue("@IssueDate", certificate.IssueDate);
-                            cmd.Parameters.AddWithValue("@VehicleCategoryId", certificate.VehicleCategoryId);
-                            cmd.Parameters.AddWithValue("@CategoryCode", (object)certificate.CategoryCode ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@Id", certificate.Id);
+                        cmd.Parameters.AddWithValue("@CertificateSeries", certificate.CertificateSeries ?? "");
+                        cmd.Parameters.AddWithValue("@CertificateNumber", certificate.CertificateNumber ?? "");
+                        cmd.Parameters.AddWithValue("@IssueDate", certificate.IssueDate);
+                        cmd.Parameters.AddWithValue("@VehicleCategoryId", certificate.VehicleCategoryId);
 
-                            cmd.ExecuteNonQuery();
-                            return certificate.Id;
-                        }
-                        else
-                        {
-                            var cmd = new SqlCommand(@"
+                        cmd.ExecuteNonQuery();
+                        return certificate.Id;
+                    }
+                    else
+                    {
+                        var cmd = new SqlCommand(@"
                     INSERT INTO StudentCertificates 
-                    (StudentId, CertificateSeries, CertificateNumber, IssueDate, VehicleCategoryId, CategoryCode, CreatedDate)
+                    (StudentId, CertificateSeries, CertificateNumber, IssueDate, VehicleCategoryId, CreatedDate)
                     OUTPUT INSERTED.Id
-                    VALUES (@StudentId, @CertificateSeries, @CertificateNumber, @IssueDate, @VehicleCategoryId, @CategoryCode, GETDATE())", conn);
+                    VALUES (@StudentId, @CertificateSeries, @CertificateNumber, @IssueDate, @VehicleCategoryId, GETDATE())", conn);  // Убрали CategoryCode
 
-                            cmd.Parameters.AddWithValue("@StudentId", certificate.StudentId);
-                            cmd.Parameters.AddWithValue("@CertificateSeries", certificate.CertificateSeries ?? "");
-                            cmd.Parameters.AddWithValue("@CertificateNumber", certificate.CertificateNumber ?? "");
-                            cmd.Parameters.AddWithValue("@IssueDate", certificate.IssueDate);
-                            cmd.Parameters.AddWithValue("@VehicleCategoryId", certificate.VehicleCategoryId);
-                            cmd.Parameters.AddWithValue("@CategoryCode", (object)certificate.CategoryCode ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@StudentId", certificate.StudentId);
+                        cmd.Parameters.AddWithValue("@CertificateSeries", certificate.CertificateSeries ?? "");
+                        cmd.Parameters.AddWithValue("@CertificateNumber", certificate.CertificateNumber ?? "");
+                        cmd.Parameters.AddWithValue("@IssueDate", certificate.IssueDate);
+                        cmd.Parameters.AddWithValue("@VehicleCategoryId", certificate.VehicleCategoryId);
 
-                            return (int)cmd.ExecuteScalar();
-                        }
+                        return (int)cmd.ExecuteScalar();
                     }
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Ошибка сохранения свидетельства: {ex.Message}");
-                    throw new Exception($"Ошибка сохранения свидетельства: {ex.Message}");
-                }
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения свидетельства: {ex.Message}");
+                throw new Exception($"Ошибка сохранения свидетельства: {ex.Message}");
+            }
+        }
 
-            /// <summary>
-            /// Удаление свидетельства
-            /// </summary>
-            public void DeleteCertificateData(int certificateId)
+        /// <summary>
+        /// Удаление свидетельства
+        /// </summary>
+        public void DeleteCertificateData(int certificateId)
             {
                 try
                 {

@@ -75,8 +75,8 @@ namespace DrivingSchool.Views
 
             try
             {
-                // TODO: Сохранить через сервис
-                // _dataService.SaveAddressData(AddressData);
+                // ИСПРАВЛЕНИЕ: РАСКОММЕНТИРОВАЛИ СОХРАНЕНИЕ!
+                _dataService.SaveAddressData(AddressData);
 
                 DialogResult = true;
                 Close();

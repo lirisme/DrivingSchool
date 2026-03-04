@@ -7,10 +7,17 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <!-- 0: Заголовок -->
             <RowDefinition Height="Auto"/>
+            <!-- 1: Панель поиска -->
             <RowDefinition Height="Auto"/>
+            <!-- 2: Результаты поиска + Выбранный студент -->
+            <RowDefinition Height="Auto"/>
+            <!-- 3: Панель кнопок -->
             <RowDefinition Height="*"/>
+            <!-- 4: Таблица -->
             <RowDefinition Height="Auto"/>
+            <!-- 5: Инфо панель -->
         </Grid.RowDefinitions>
 
         <!-- Заголовок -->
@@ -30,31 +37,48 @@
                     Width="30" Height="30" 
                     Click="ClearSearch_Click"
                     Margin="5,0,0,0"/>
+
+            <!-- ДОБАВЛЯЕМ КНОПКУ СБРОСА ВЫБОРА -->
+            <Button x:Name="ClearSelectedStudentButton" 
+                    Content="❌ Сбросить выбор" 
+                    Width="120" Height="30" 
+                    Click="ClearSelectedStudent_Click"
+                    Margin="5,0,0,0"
+                    Background="#FF9800" 
+                    Foreground="White"
+                    ToolTip="Сбросить выбранного студента"/>
         </StackPanel>
 
-        <!-- Результаты поиска студентов -->
-        <ListBox x:Name="SearchResultsListBox" 
-                 Grid.Row="2" 
-                 MaxHeight="150"
-                 Margin="130,0,0,10"
-                 Visibility="Collapsed"
-                 DisplayMemberPath="FullName"
-                 SelectionChanged="SearchResultsListBox_SelectionChanged"
-                 Background="White" BorderBrush="#CCCCCC"/>
+        <!-- Результаты поиска студентов и выбранный студент -->
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <!-- Выбранный студент -->
-        <Border x:Name="SelectedStudentPanel" 
-                Grid.Row="2" 
-                Background="#E3F2FD" 
-                Padding="10" 
-                CornerRadius="5" 
-                Margin="0,0,0,10"
-                Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="SelectedStudentText" FontWeight="Bold" FontSize="14"/>
-                <TextBlock x:Name="SelectedStudentDetails" FontSize="12" Foreground="#666666" Margin="0,5,0,0"/>
-            </StackPanel>
-        </Border>
+            <!-- Результаты поиска -->
+            <ListBox x:Name="SearchResultsListBox" 
+                     Grid.Row="0"
+                     MaxHeight="150"
+                     Margin="130,0,0,5"
+                     Visibility="Collapsed"
+                     DisplayMemberPath="FullName"
+                     SelectionChanged="SearchResultsListBox_SelectionChanged"
+                     Background="White" BorderBrush="#CCCCCC"/>
+
+            <!-- Выбранный студент -->
+            <Border x:Name="SelectedStudentPanel" 
+                    Grid.Row="1"
+                    Background="#E3F2FD" 
+                    Padding="10" 
+                    CornerRadius="5" 
+                    Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="SelectedStudentText" FontWeight="Bold" FontSize="14"/>
+                    <TextBlock x:Name="SelectedStudentDetails" FontSize="12" Foreground="#666666" Margin="0,5,0,0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
 
         <!-- Панель кнопок -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,10" HorizontalAlignment="Right">

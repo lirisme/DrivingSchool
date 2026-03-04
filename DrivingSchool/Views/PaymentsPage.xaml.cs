@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using DrivingSchool.Models;
 using DrivingSchool.Services;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace DrivingSchool.Views
 {
@@ -12,7 +14,7 @@ namespace DrivingSchool.Views
         private readonly SqlDataService _dataService;
         private StudentCollection _students;
         private Student _selectedStudent;
-        private System.Collections.Generic.List<Payment> _payments;
+        private List<Payment> _payments;
 
         public PaymentsPage(SqlDataService dataService)
         {
@@ -25,41 +27,51 @@ namespace DrivingSchool.Views
         {
             try
             {
-                _students = _dataService.LoadStudents();
+                Debug.WriteLine("=== ЗАГРУЗКА ДАННЫХ ПЛАТЕЖЕЙ ===");
+                _students = _dataService.LoadStudents() ?? new StudentCollection { Students = new List<Student>() };
+                Debug.WriteLine($"Загружено студентов: {_students.Students.Count}");
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА загрузки данных: {ex.Message}");
                 MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
-                _students = new StudentCollection { Students = new System.Collections.Generic.List<Student>() };
+                _students = new StudentCollection { Students = new List<Student>() };
             }
         }
 
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var searchText = SearchTextBox.Text?.ToLower() ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(searchText))
+            try
             {
-                SearchResultsListBox.Visibility = Visibility.Collapsed;
-                return;
+                var searchText = SearchTextBox.Text?.ToLower() ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(searchText))
+                {
+                    SearchResultsListBox.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                var results = _students?.Students?
+                    .Where(s => (s.LastName ?? "").ToLower().Contains(searchText) ||
+                               (s.FirstName ?? "").ToLower().Contains(searchText) ||
+                               (s.Phone ?? "").Contains(searchText))
+                    .Take(10)
+                    .ToList() ?? new List<Student>();
+
+                if (results.Any())
+                {
+                    SearchResultsListBox.ItemsSource = results;
+                    SearchResultsListBox.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    SearchResultsListBox.Visibility = Visibility.Collapsed;
+                }
             }
-
-            var results = _students.Students
-                .Where(s => (s.LastName ?? "").ToLower().Contains(searchText) ||
-                           (s.FirstName ?? "").ToLower().Contains(searchText) ||
-                           (s.Phone ?? "").Contains(searchText))
-                .Take(10)
-                .ToList();
-
-            if (results.Any())
+            catch (Exception ex)
             {
-                SearchResultsListBox.ItemsSource = results;
-                SearchResultsListBox.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                SearchResultsListBox.Visibility = Visibility.Collapsed;
+                Debug.WriteLine($"Ошибка поиска: {ex.Message}");
             }
         }
 
@@ -93,16 +105,20 @@ namespace DrivingSchool.Views
         {
             try
             {
-                _payments = _dataService.LoadStudentPayments(_selectedStudent.Id);
+                Debug.WriteLine($"Загрузка платежей для студента ID={_selectedStudent.Id}");
+                _payments = _dataService.LoadStudentPayments(_selectedStudent.Id) ?? new List<Payment>();
+                Debug.WriteLine($"Загружено платежей: {_payments.Count}");
+
                 PaymentsGrid.ItemsSource = _payments;
                 UpdateTotalAmount();
                 UpdateButtonsAvailability();
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА загрузки платежей: {ex.Message}");
                 MessageBox.Show($"Ошибка загрузки платежей: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
-                _payments = new System.Collections.Generic.List<Payment>();
+                _payments = new List<Payment>();
                 PaymentsGrid.ItemsSource = null;
             }
         }
@@ -133,13 +149,29 @@ namespace DrivingSchool.Views
 
         private void UpdateButtonsAvailability()
         {
-            var hasStudent = _selectedStudent != null;
-            var hasSelection = PaymentsGrid.SelectedItem != null;
+            try
+            {
+                var hasStudent = _selectedStudent != null;
+                var hasSelection = PaymentsGrid.SelectedItem != null;
 
-            AddPaymentButton.IsEnabled = hasStudent;
-            EditPaymentButton.IsEnabled = hasStudent && hasSelection;
-            DeletePaymentButton.IsEnabled = hasStudent && hasSelection;
-            ViewPaymentButton.IsEnabled = hasStudent && hasSelection;
+                Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasSelection={hasSelection}");
+
+                // ИСПРАВЛЕНИЕ: можно добавлять много платежей
+                AddPaymentButton.IsEnabled = hasStudent;
+                EditPaymentButton.IsEnabled = hasStudent && hasSelection;
+                DeletePaymentButton.IsEnabled = hasStudent && hasSelection;
+                ViewPaymentButton.IsEnabled = hasStudent && hasSelection;
+
+                // Визуальная индикация
+                AddPaymentButton.Opacity = AddPaymentButton.IsEnabled ? 1.0 : 0.5;
+                EditPaymentButton.Opacity = EditPaymentButton.IsEnabled ? 1.0 : 0.5;
+                DeletePaymentButton.Opacity = DeletePaymentButton.IsEnabled ? 1.0 : 0.5;
+                ViewPaymentButton.Opacity = ViewPaymentButton.IsEnabled ? 1.0 : 0.5;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ОШИБКА в UpdateButtonsAvailability: {ex.Message}");
+            }
         }
 
         private void PaymentsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -149,20 +181,35 @@ namespace DrivingSchool.Views
 
         private void AddPayment_Click(object sender, RoutedEventArgs e)
         {
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
+                Debug.WriteLine($"Добавление платежа для студента ID={_selectedStudent.Id}");
+
                 var dialog = new PaymentEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
+                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
                     LoadPaymentsForStudent();
                     MessageBox.Show("Платеж успешно добавлен!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
+                else
+                {
+                    Debug.WriteLine("Диалог закрыт с Cancel");
+                }
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА при добавлении платежа: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении платежа: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -177,13 +224,23 @@ namespace DrivingSchool.Views
                 return;
             }
 
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
+                Debug.WriteLine($"Редактирование платежа ID={selectedPayment.Id}");
+
                 var dialog = new PaymentEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedPayment);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
+                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
                     LoadPaymentsForStudent();
                     MessageBox.Show("Платеж успешно обновлен!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
@@ -191,6 +248,7 @@ namespace DrivingSchool.Views
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"ОШИБКА при редактировании платежа: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании платежа: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -205,11 +263,19 @@ namespace DrivingSchool.Views
                 return;
             }
 
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             if (MessageBox.Show($"Удалить платеж на сумму {selectedPayment.Amount:N2} руб. от {selectedPayment.PaymentDate:dd.MM.yyyy}?",
                 "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
                 try
                 {
+                    Debug.WriteLine($"Удаление платежа ID={selectedPayment.Id}");
                     _dataService.DeletePayment(selectedPayment.Id);
                     LoadPaymentsForStudent();
                     MessageBox.Show("Платеж удален.", "Успех",
@@ -217,6 +283,7 @@ namespace DrivingSchool.Views
                 }
                 catch (Exception ex)
                 {
+                    Debug.WriteLine($"ОШИБКА при удалении платежа: {ex.Message}");
                     MessageBox.Show($"Ошибка при удалении платежа: {ex.Message}", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -228,6 +295,13 @@ namespace DrivingSchool.Views
             if (!(PaymentsGrid.SelectedItem is Payment selectedPayment))
             {
                 MessageBox.Show("Выберите платеж для просмотра", "Предупреждение",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (_selectedStudent == null)
+            {
+                MessageBox.Show("Выберите студента", "Предупреждение",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -250,21 +324,23 @@ namespace DrivingSchool.Views
             SearchResultsListBox.Visibility = Visibility.Collapsed;
         }
 
+        private void ClearSelectedStudent_Click(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("Сброс выбранного студента");
+            _selectedStudent = null;
+            SelectedStudentPanel.Visibility = Visibility.Collapsed;
+            PaymentsGrid.ItemsSource = null;
+            _payments = null;
+            UpdateTotalAmount();
+            UpdateButtonsAvailability();
+        }
+
         private void PaymentsGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             if (PaymentsGrid.SelectedItem != null && _selectedStudent != null)
             {
                 EditPayment_Click(sender, e);
             }
-        }
-
-        private void ClearSelectedStudent_Click(object sender, RoutedEventArgs e)
-        {
-            _selectedStudent = null;
-            SelectedStudentPanel.Visibility = Visibility.Collapsed;
-            PaymentsGrid.ItemsSource = null;
-            UpdateTotalAmount();
-            UpdateButtonsAvailability();
         }
     }
 }

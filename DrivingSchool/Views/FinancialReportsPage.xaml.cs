@@ -22,29 +22,18 @@ namespace DrivingSchool.Views
         {
             InitializeComponent();
             _dataService = dataService;
-            LoadData();
-            InitializeDateFilters();
-            GenerateGeneralReport();
-        }
 
-        private void LoadData()
-        {
-            try
-            {
-                _students = _dataService.LoadStudents();
-                _payments = _dataService.LoadPayments();
-                // TODO: Загрузить остальные данные через сервис
-                _tuitions = new StudentTuitionCollection { Tuitions = new List<StudentTuition>() };
-                _tariffs = new TariffCollection { Tariffs = new List<Tariff>() };
-                _groups = _dataService.LoadStudyGroups();
-                _vehicleCategories = _dataService.LoadVehicleCategories();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-                InitializeEmptyCollections();
-            }
+            // ИНИЦИАЛИЗАЦИЯ: сразу создаем пустые коллекции
+            InitializeEmptyCollections();
+
+            // Загружаем данные
+            LoadData();
+
+            // Инициализируем фильтры
+            InitializeDateFilters();
+
+            // Генерируем отчет
+            GenerateGeneralReport();
         }
 
         private void InitializeEmptyCollections()
@@ -57,76 +46,144 @@ namespace DrivingSchool.Views
             _vehicleCategories = new VehicleCategoryCollection { Categories = new List<VehicleCategory>() };
         }
 
+        private void LoadData()
+        {
+            try
+            {
+                var students = _dataService.LoadStudents();
+                if (students?.Students != null)
+                    _students = students;
+
+                var payments = _dataService.LoadPayments();
+                if (payments?.Payments != null)
+                    _payments = payments;
+
+                var groups = _dataService.LoadStudyGroups();
+                if (groups?.Groups != null)
+                    _groups = groups;
+
+                var categories = _dataService.LoadVehicleCategories();
+                if (categories?.Categories != null)
+                    _vehicleCategories = categories;
+
+                // Загружаем остальные данные через try-catch, т.к. методов может не быть
+                try
+                {
+                    var tuitions = _dataService.LoadStudentTuitions();
+                    if (tuitions?.Tuitions != null)
+                        _tuitions = tuitions;
+                }
+                catch
+                {
+                    // Метод может отсутствовать, оставляем пустую коллекцию
+                    _tuitions = new StudentTuitionCollection { Tuitions = new List<StudentTuition>() };
+                }
+
+                try
+                {
+                    var tariffs = _dataService.LoadTariffs();
+                    if (tariffs?.Tariffs != null)
+                        _tariffs = tariffs;
+                }
+                catch
+                {
+                    _tariffs = new TariffCollection { Tariffs = new List<Tariff>() };
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+                MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                // Коллекции уже инициализированы пустыми в конструкторе
+            }
+        }
+
         private void InitializeDateFilters()
         {
-            var currentDate = DateTime.Now;
-            StartDatePicker.SelectedDate = new DateTime(currentDate.Year, currentDate.Month, 1);
-            EndDatePicker.SelectedDate = currentDate;
-            PeriodComboBox.SelectedIndex = 2; // За текущий месяц
+            try
+            {
+                var currentDate = DateTime.Now;
+                StartDatePicker.SelectedDate = new DateTime(currentDate.Year, currentDate.Month, 1);
+                EndDatePicker.SelectedDate = currentDate;
+                PeriodComboBox.SelectedIndex = 2; // За текущий месяц
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка инициализации фильтров: {ex.Message}");
+            }
         }
 
         private void PeriodComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (PeriodComboBox.SelectedIndex == -1) return;
-
-            var currentDate = DateTime.Now;
-
-            switch (PeriodComboBox.SelectedIndex)
+            try
             {
-                case 0: // За сегодня
-                    StartDatePicker.SelectedDate = currentDate.Date;
-                    EndDatePicker.SelectedDate = currentDate.Date;
-                    StartDatePicker.IsEnabled = false;
-                    EndDatePicker.IsEnabled = false;
-                    break;
+                if (PeriodComboBox.SelectedIndex == -1) return;
 
-                case 1: // За текущую неделю
-                    var diff = (7 + (currentDate.DayOfWeek - DayOfWeek.Monday)) % 7;
-                    StartDatePicker.SelectedDate = currentDate.AddDays(-diff).Date;
-                    EndDatePicker.SelectedDate = currentDate.Date;
-                    StartDatePicker.IsEnabled = false;
-                    EndDatePicker.IsEnabled = false;
-                    break;
+                var currentDate = DateTime.Now;
 
-                case 2: // За текущий месяц
-                    StartDatePicker.SelectedDate = new DateTime(currentDate.Year, currentDate.Month, 1);
-                    EndDatePicker.SelectedDate = currentDate.Date;
-                    StartDatePicker.IsEnabled = false;
-                    EndDatePicker.IsEnabled = false;
-                    break;
+                switch (PeriodComboBox.SelectedIndex)
+                {
+                    case 0: // За сегодня
+                        StartDatePicker.SelectedDate = currentDate.Date;
+                        EndDatePicker.SelectedDate = currentDate.Date;
+                        StartDatePicker.IsEnabled = false;
+                        EndDatePicker.IsEnabled = false;
+                        break;
 
-                case 3: // За текущий квартал
-                    var quarter = (currentDate.Month - 1) / 3;
-                    var quarterStartMonth = quarter * 3 + 1;
-                    StartDatePicker.SelectedDate = new DateTime(currentDate.Year, quarterStartMonth, 1);
-                    EndDatePicker.SelectedDate = currentDate.Date;
-                    StartDatePicker.IsEnabled = false;
-                    EndDatePicker.IsEnabled = false;
-                    break;
+                    case 1: // За текущую неделю
+                        var diff = (7 + (currentDate.DayOfWeek - DayOfWeek.Monday)) % 7;
+                        StartDatePicker.SelectedDate = currentDate.AddDays(-diff).Date;
+                        EndDatePicker.SelectedDate = currentDate.Date;
+                        StartDatePicker.IsEnabled = false;
+                        EndDatePicker.IsEnabled = false;
+                        break;
 
-                case 4: // За текущий год
-                    StartDatePicker.SelectedDate = new DateTime(currentDate.Year, 1, 1);
-                    EndDatePicker.SelectedDate = currentDate.Date;
-                    StartDatePicker.IsEnabled = false;
-                    EndDatePicker.IsEnabled = false;
-                    break;
+                    case 2: // За текущий месяц
+                        StartDatePicker.SelectedDate = new DateTime(currentDate.Year, currentDate.Month, 1);
+                        EndDatePicker.SelectedDate = currentDate.Date;
+                        StartDatePicker.IsEnabled = false;
+                        EndDatePicker.IsEnabled = false;
+                        break;
 
-                case 5: // За все время
-                    StartDatePicker.SelectedDate = new DateTime(2020, 1, 1);
-                    EndDatePicker.SelectedDate = currentDate.Date;
-                    StartDatePicker.IsEnabled = false;
-                    EndDatePicker.IsEnabled = false;
-                    break;
+                    case 3: // За текущий квартал
+                        var quarter = (currentDate.Month - 1) / 3;
+                        var quarterStartMonth = quarter * 3 + 1;
+                        StartDatePicker.SelectedDate = new DateTime(currentDate.Year, quarterStartMonth, 1);
+                        EndDatePicker.SelectedDate = currentDate.Date;
+                        StartDatePicker.IsEnabled = false;
+                        EndDatePicker.IsEnabled = false;
+                        break;
 
-                case 6: // Произвольный период
-                    StartDatePicker.IsEnabled = true;
-                    EndDatePicker.IsEnabled = true;
-                    break;
+                    case 4: // За текущий год
+                        StartDatePicker.SelectedDate = new DateTime(currentDate.Year, 1, 1);
+                        EndDatePicker.SelectedDate = currentDate.Date;
+                        StartDatePicker.IsEnabled = false;
+                        EndDatePicker.IsEnabled = false;
+                        break;
+
+                    case 5: // За все время
+                        StartDatePicker.SelectedDate = new DateTime(2020, 1, 1);
+                        EndDatePicker.SelectedDate = currentDate.Date;
+                        StartDatePicker.IsEnabled = false;
+                        EndDatePicker.IsEnabled = false;
+                        break;
+
+                    case 6: // Произвольный период
+                        StartDatePicker.IsEnabled = true;
+                        EndDatePicker.IsEnabled = true;
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка в PeriodComboBox_SelectionChanged: {ex.Message}");
             }
         }
 
         private List<Payment> GetPaymentsInPeriod(DateTime? start, DateTime? end)
         {
+            // Проверка на null
             if (_payments?.Payments == null || !_payments.Payments.Any())
                 return new List<Payment>();
 
@@ -154,15 +211,30 @@ namespace DrivingSchool.Views
                 var paymentCount = periodPayments.Count;
                 var avgPayment = paymentCount > 0 ? totalIncome / paymentCount : 0;
 
-                // Расчет задолженности
-                var totalExpectedIncome = _tuitions?.Tuitions?.Sum(t => t.FinalAmount) ?? 0;
-                var totalPaidAllTime = _payments?.Payments?.Sum(p => p.Amount) ?? 0;
+                // Расчет задолженности с проверкой на null
+                decimal totalExpectedIncome = 0;
+                decimal totalPaidAllTime = 0;
+
+                if (_tuitions?.Tuitions != null)
+                    totalExpectedIncome = _tuitions.Tuitions.Sum(t => t.FinalAmount);
+
+                if (_payments?.Payments != null)
+                    totalPaidAllTime = _payments.Payments.Sum(p => p.Amount);
+
                 var totalDebt = totalExpectedIncome - totalPaidAllTime;
 
-                TotalIncomeText.Text = $"{totalIncome:N2} руб.";
-                TotalPaymentsText.Text = paymentCount.ToString();
-                AveragePaymentText.Text = $"{avgPayment:N2} руб.";
-                TotalDebtText.Text = $"{Math.Max(0, totalDebt):N2} руб.";
+                // Обновляем UI элементы (проверяем, что они существуют)
+                if (TotalIncomeText != null)
+                    TotalIncomeText.Text = $"{totalIncome:N2} руб.";
+
+                if (TotalPaymentsText != null)
+                    TotalPaymentsText.Text = paymentCount.ToString();
+
+                if (AveragePaymentText != null)
+                    AveragePaymentText.Text = $"{avgPayment:N2} руб.";
+
+                if (TotalDebtText != null)
+                    TotalDebtText.Text = $"{Math.Max(0, totalDebt):N2} руб.";
 
                 // Статистика по типам платежей
                 var paymentTypes = periodPayments
@@ -175,7 +247,8 @@ namespace DrivingSchool.Views
                     })
                     .ToList();
 
-                PaymentTypesDataGrid.ItemsSource = paymentTypes;
+                if (PaymentTypesDataGrid != null)
+                    PaymentTypesDataGrid.ItemsSource = paymentTypes;
 
                 // Последние платежи
                 var recentPayments = periodPayments
@@ -191,10 +264,12 @@ namespace DrivingSchool.Views
                     })
                     .ToList();
 
-                RecentPaymentsDataGrid.ItemsSource = recentPayments;
+                if (RecentPaymentsDataGrid != null)
+                    RecentPaymentsDataGrid.ItemsSource = recentPayments;
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при формировании общего отчета: {ex.Message}");
                 MessageBox.Show($"Ошибка при формировании отчета: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -221,14 +296,18 @@ namespace DrivingSchool.Views
                     .OrderByDescending(p => p.PaymentDate)
                     .ToList();
 
-                PaymentsDataGrid.ItemsSource = detailedPayments;
+                if (PaymentsDataGrid != null)
+                    PaymentsDataGrid.ItemsSource = detailedPayments;
 
                 var total = detailedPayments.Sum(p => p.Amount);
                 var count = detailedPayments.Count;
-                PaymentsSummaryText.Text = $"Всего оплат: {count} на сумму {total:N2} руб.";
+
+                if (PaymentsSummaryText != null)
+                    PaymentsSummaryText.Text = $"Всего оплат: {count} на сумму {total:N2} руб.";
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при формировании отчета по оплатам: {ex.Message}");
                 MessageBox.Show($"Ошибка при формировании отчета: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -242,6 +321,14 @@ namespace DrivingSchool.Views
                 var endDate = EndDatePicker.SelectedDate;
 
                 var periodPayments = GetPaymentsInPeriod(startDate, endDate);
+
+                // Проверка на null
+                if (_students?.Students == null)
+                {
+                    if (StudentsSummaryText != null)
+                        StudentsSummaryText.Text = "Нет данных о студентах";
+                    return;
+                }
 
                 var studentFinancials = _students.Students
                     .Select(student =>
@@ -277,16 +364,19 @@ namespace DrivingSchool.Views
                     .OrderByDescending(s => s.Debt)
                     .ToList();
 
-                StudentsDataGrid.ItemsSource = studentFinancials;
+                if (StudentsDataGrid != null)
+                    StudentsDataGrid.ItemsSource = studentFinancials;
 
                 var withDebt = studentFinancials.Count(s => s.Debt > 0);
                 var totalDebt = studentFinancials.Where(s => s.Debt > 0).Sum(s => s.Debt);
 
-                StudentsSummaryText.Text = $"Студентов с оплатами: {studentFinancials.Count} | " +
-                                          $"С долгом: {withDebt} | Общий долг: {totalDebt:N2} руб.";
+                if (StudentsSummaryText != null)
+                    StudentsSummaryText.Text = $"Студентов с оплатами: {studentFinancials.Count} | " +
+                                              $"С долгом: {withDebt} | Общий долг: {totalDebt:N2} руб.";
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при формировании отчета по студентам: {ex.Message}");
                 MessageBox.Show($"Ошибка при формировании отчета: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -300,6 +390,14 @@ namespace DrivingSchool.Views
                 var endDate = EndDatePicker.SelectedDate;
 
                 var periodPayments = GetPaymentsInPeriod(startDate, endDate);
+
+                // Проверка на null
+                if (_groups?.Groups == null || _students?.Students == null)
+                {
+                    if (GroupsDataGrid != null)
+                        GroupsDataGrid.ItemsSource = null;
+                    return;
+                }
 
                 var groupFinancials = _groups.Groups
                     .Select(group =>
@@ -341,10 +439,12 @@ namespace DrivingSchool.Views
                     .OrderByDescending(g => g.ActualIncome)
                     .ToList();
 
-                GroupsDataGrid.ItemsSource = groupFinancials;
+                if (GroupsDataGrid != null)
+                    GroupsDataGrid.ItemsSource = groupFinancials;
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при формировании отчета по группам: {ex.Message}");
                 MessageBox.Show($"Ошибка при формировании отчета: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -358,6 +458,14 @@ namespace DrivingSchool.Views
                 var endDate = EndDatePicker.SelectedDate;
 
                 var periodPayments = GetPaymentsInPeriod(startDate, endDate);
+
+                // Проверка на null
+                if (_vehicleCategories?.Categories == null || _students?.Students == null)
+                {
+                    if (CategoriesDataGrid != null)
+                        CategoriesDataGrid.ItemsSource = null;
+                    return;
+                }
 
                 var categoriesReport = _vehicleCategories.Categories
                     .Select(category =>
@@ -376,9 +484,12 @@ namespace DrivingSchool.Views
 
                         var expectedIncome = categoryTuitions.Sum(t => t.FinalAmount);
                         var actualIncome = categoryPeriodPayments.Sum(p => p.Amount);
-                        var debt = expectedIncome - (_payments?.Payments?
+
+                        var allPayments = _payments?.Payments?
                             .Where(p => categoryStudents.Any(s => s.Id == p.StudentId))
-                            .Sum(p => p.Amount) ?? 0);
+                            .Sum(p => p.Amount) ?? 0;
+
+                        var debt = expectedIncome - allPayments;
 
                         var averagePayment = categoryPeriodPayments.Any() ?
                             categoryPeriodPayments.Average(p => p.Amount) : 0;
@@ -397,16 +508,19 @@ namespace DrivingSchool.Views
                     .OrderByDescending(c => c.ActualIncome)
                     .ToList();
 
-                CategoriesDataGrid.ItemsSource = categoriesReport;
+                if (CategoriesDataGrid != null)
+                    CategoriesDataGrid.ItemsSource = categoriesReport;
 
                 var totalStudents = categoriesReport.Sum(c => c.StudentCount);
                 var totalIncome = categoriesReport.Sum(c => c.ActualIncome);
 
-                CategoriesSummaryText.Text = $"Всего студентов по категориям: {totalStudents} | " +
-                                            $"Доход за период: {totalIncome:N2} руб.";
+                if (CategoriesSummaryText != null)
+                    CategoriesSummaryText.Text = $"Всего студентов по категориям: {totalStudents} | " +
+                                                $"Доход за период: {totalIncome:N2} руб.";
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при формировании отчета по категориям: {ex.Message}");
                 MessageBox.Show($"Ошибка при формировании отчета: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -414,12 +528,18 @@ namespace DrivingSchool.Views
 
         private string GetStudentName(int studentId)
         {
+            if (_students?.Students == null)
+                return "Неизвестный студент";
+
             var student = _students.Students.FirstOrDefault(s => s.Id == studentId);
             return student?.FullName ?? "Неизвестный студент";
         }
 
         private string GetGroupName(int groupId)
         {
+            if (_groups?.Groups == null)
+                return "Не назначена";
+
             var group = _groups.Groups.FirstOrDefault(g => g.Id == groupId);
             return group?.Name ?? "Не назначена";
         }
@@ -450,6 +570,10 @@ namespace DrivingSchool.Views
                     return;
                 }
 
+                // Проверяем, выбран ли TabControl и его индекс
+                if (ReportTypeTabControl == null)
+                    return;
+
                 switch (ReportTypeTabControl.SelectedIndex)
                 {
                     case 0:
@@ -471,13 +595,14 @@ namespace DrivingSchool.Views
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при формировании отчета: {ex.Message}");
                 MessageBox.Show($"Ошибка при формировании отчета: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
 
-    // Вспомогательные классы для отчетов
+    // Вспомогательные классы для отчетов (оставляем без изменений)
     public class PaymentDetail
     {
         public int Id { get; set; }

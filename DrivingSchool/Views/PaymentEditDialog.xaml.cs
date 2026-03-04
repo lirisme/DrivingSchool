@@ -76,6 +76,7 @@ namespace DrivingSchool.Views
 
             try
             {
+                // УЖЕ РАБОТАЕТ! Код правильный
                 if (PaymentData.Id == 0)
                 {
                     // Новый платеж
