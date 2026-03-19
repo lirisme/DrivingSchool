@@ -1,0 +1,46 @@
+﻿<Window x:Class="DrivingSchool.Views.TuitionEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Редактирование стоимости обучения"
+        Height="300" Width="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Студент -->
+        <TextBlock Grid.Row="0" Text="Студент:" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="1" x:Name="StudentNameText" Text="" Margin="0,0,0,15"/>
+
+        <!-- Стоимость обучения -->
+        <TextBlock Grid.Row="2" Text="Стоимость обучения (руб.):" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="3" x:Name="TuitionTextBox" Text="0" Margin="0,0,0,10" Padding="5"/>
+
+        <!-- Скидка -->
+        <TextBlock Grid.Row="4" Text="Скидка (руб.):" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBox Grid.Row="5" x:Name="DiscountTextBox" Text="0" Margin="0,0,0,10" Padding="5"/>
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Сохранить" 
+                    Click="SaveButton_Click"
+                    Width="100" Height="35" 
+                    Background="#4CAF50" Foreground="White"
+                    Margin="0,0,10,0"/>
+
+            <Button Content="Отмена" 
+                    Click="CancelButton_Click"
+                    Width="100" Height="35" 
+                    Background="#f44336" Foreground="White"/>
+        </StackPanel>
+    </Grid>
+</Window>

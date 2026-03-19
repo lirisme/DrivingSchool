@@ -164,6 +164,9 @@
     <Compile Include="Views\TariffsPage.xaml.cs">
       <DependentUpon>TariffsPage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Views\TuitionEditDialog.xaml.cs">
+      <DependentUpon>TuitionEditDialog.xaml</DependentUpon>
+    </Compile>
     <Page Include="Views\FinancialReportsPage.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -285,6 +288,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\TariffsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\TuitionEditDialog.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

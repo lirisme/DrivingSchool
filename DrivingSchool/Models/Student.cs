@@ -19,6 +19,12 @@ namespace DrivingSchool.Models
         public int VehicleCategoryId { get; set; }
         public int InstructorId { get; set; }
         public int CarId { get; set; }
+
+        // НОВЫЕ ПОЛЯ для стоимости обучения
+        public decimal TuitionAmount { get; set; } // Полная стоимость
+        public decimal DiscountAmount { get; set; } // Сумма скидки
+        public int? TariffId { get; set; } // ID тарифа (если используется)
+
         public DateTime CreatedDate { get; set; }
         public DateTime? ModifiedDate { get; set; }
 
@@ -46,12 +52,41 @@ namespace DrivingSchool.Models
             }
         }
 
+        // ВЫЧИСЛЯЕМЫЕ ПОЛЯ ДЛЯ ОПЛАТЫ
+        public decimal FinalAmount => TuitionAmount - DiscountAmount; // Итоговая сумма к оплате
+
+        // Эти поля будут заполняться отдельно из платежей
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount => FinalAmount - PaidAmount;
+
+        public int PaymentProgress
+        {
+            get
+            {
+                if (FinalAmount == 0) return 0;
+                var progress = (int)((PaidAmount / FinalAmount) * 100);
+                return Math.Min(100, Math.Max(0, progress));
+            }
+        }
+
+        public string PaymentStatus
+        {
+            get
+            {
+                if (FinalAmount == 0) return "Не установлена";
+                if (RemainingAmount <= 0) return "Оплачено полностью";
+                if (PaidAmount == 0) return "Не оплачено";
+                return $"Осталось: {RemainingAmount:N2} руб.";
+            }
+        }
+
         // Дополнительные поля для отображения в интерфейсе
         public string CategoryCode { get; set; }
         public string CategoryName { get; set; }
         public string GroupName { get; set; }
         public string InstructorName { get; set; }
         public string CarInfo { get; set; }
+        public string TariffName { get; set; }
 
         // Свойства для документов (будут заполняться отдельно)
         public bool HasPassport { get; set; }

@@ -22,17 +22,9 @@ namespace DrivingSchool.Views
         {
             InitializeComponent();
             _dataService = dataService;
-
-            // ИНИЦИАЛИЗАЦИЯ: сразу создаем пустые коллекции
             InitializeEmptyCollections();
-
-            // Загружаем данные
             LoadData();
-
-            // Инициализируем фильтры
             InitializeDateFilters();
-
-            // Генерируем отчет
             GenerateGeneralReport();
         }
 
@@ -66,16 +58,26 @@ namespace DrivingSchool.Views
                 if (categories?.Categories != null)
                     _vehicleCategories = categories;
 
-                // Загружаем остальные данные через try-catch, т.к. методов может не быть
+                // Загружаем стоимости обучения и тарифы
                 try
                 {
                     var tuitions = _dataService.LoadStudentTuitions();
                     if (tuitions?.Tuitions != null)
+                    {
                         _tuitions = tuitions;
+
+                        // Загружаем оплаты для каждого студента, чтобы рассчитать долг
+                        foreach (var tuition in _tuitions.Tuitions)
+                        {
+                            var studentPayments = _payments?.Payments?
+                                .Where(p => p.StudentId == tuition.StudentId)
+                                .ToList() ?? new List<Payment>();
+                            tuition.PaidAmount = studentPayments.Sum(p => p.Amount);
+                        }
+                    }
                 }
                 catch
                 {
-                    // Метод может отсутствовать, оставляем пустую коллекцию
                     _tuitions = new StudentTuitionCollection { Tuitions = new List<StudentTuition>() };
                 }
 
@@ -95,7 +97,6 @@ namespace DrivingSchool.Views
                 System.Diagnostics.Debug.WriteLine($"Ошибка загрузки данных: {ex.Message}");
                 MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
-                // Коллекции уже инициализированы пустыми в конструкторе
             }
         }
 
@@ -106,7 +107,7 @@ namespace DrivingSchool.Views
                 var currentDate = DateTime.Now;
                 StartDatePicker.SelectedDate = new DateTime(currentDate.Year, currentDate.Month, 1);
                 EndDatePicker.SelectedDate = currentDate;
-                PeriodComboBox.SelectedIndex = 2; // За текущий месяц
+                PeriodComboBox.SelectedIndex = 2;
             }
             catch (Exception ex)
             {
@@ -183,17 +184,16 @@ namespace DrivingSchool.Views
 
         private List<Payment> GetPaymentsInPeriod(DateTime? start, DateTime? end)
         {
-            // Проверка на null
             if (_payments?.Payments == null || !_payments.Payments.Any())
                 return new List<Payment>();
 
             var query = _payments.Payments.AsEnumerable();
 
             if (start.HasValue)
-                query = query.Where(p => p.PaymentDate >= start.Value.Date);
+                query = query.Where(p => p.PaymentDate.Date >= start.Value.Date);
 
             if (end.HasValue)
-                query = query.Where(p => p.PaymentDate <= end.Value.Date.AddDays(1).AddTicks(-1));
+                query = query.Where(p => p.PaymentDate.Date <= end.Value.Date);
 
             return query.ToList();
         }
@@ -211,19 +211,29 @@ namespace DrivingSchool.Views
                 var paymentCount = periodPayments.Count;
                 var avgPayment = paymentCount > 0 ? totalIncome / paymentCount : 0;
 
-                // Расчет задолженности с проверкой на null
+                // ИСПРАВЛЕНО: Правильный расчет ожидаемого дохода и долгов
                 decimal totalExpectedIncome = 0;
                 decimal totalPaidAllTime = 0;
+                decimal totalDebt = 0;
 
                 if (_tuitions?.Tuitions != null)
-                    totalExpectedIncome = _tuitions.Tuitions.Sum(t => t.FinalAmount);
+                {
+                    foreach (var tuition in _tuitions.Tuitions)
+                    {
+                        var finalAmount = tuition.FullAmount - tuition.Discount;
+                        totalExpectedIncome += finalAmount;
 
-                if (_payments?.Payments != null)
-                    totalPaidAllTime = _payments.Payments.Sum(p => p.Amount);
+                        var studentPayments = _payments?.Payments?
+                            .Where(p => p.StudentId == tuition.StudentId)
+                            .Sum(p => p.Amount) ?? 0;
+                        totalPaidAllTime += studentPayments;
 
-                var totalDebt = totalExpectedIncome - totalPaidAllTime;
+                        var debt = finalAmount - studentPayments;
+                        if (debt > 0) totalDebt += debt; // Только положительные долги
+                    }
+                }
 
-                // Обновляем UI элементы (проверяем, что они существуют)
+                // Обновляем UI
                 if (TotalIncomeText != null)
                     TotalIncomeText.Text = $"{totalIncome:N2} руб.";
 
@@ -234,7 +244,7 @@ namespace DrivingSchool.Views
                     AveragePaymentText.Text = $"{avgPayment:N2} руб.";
 
                 if (TotalDebtText != null)
-                    TotalDebtText.Text = $"{Math.Max(0, totalDebt):N2} руб.";
+                    TotalDebtText.Text = $"{totalDebt:N2} руб.";
 
                 // Статистика по типам платежей
                 var paymentTypes = periodPayments
@@ -253,6 +263,7 @@ namespace DrivingSchool.Views
                 // Последние платежи
                 var recentPayments = periodPayments
                     .OrderByDescending(p => p.PaymentDate)
+                    .ThenByDescending(p => p.CreatedDate) // ИСПРАВЛЕНО: учитываем время создания
                     .Take(20)
                     .Select(p => new PaymentDetail
                     {
@@ -294,6 +305,7 @@ namespace DrivingSchool.Views
                         PaymentType = p.PaymentType ?? "Не указан"
                     })
                     .OrderByDescending(p => p.PaymentDate)
+                    .ThenByDescending(p => p.Id)
                     .ToList();
 
                 if (PaymentsDataGrid != null)
@@ -322,7 +334,6 @@ namespace DrivingSchool.Views
 
                 var periodPayments = GetPaymentsInPeriod(startDate, endDate);
 
-                // Проверка на null
                 if (_students?.Students == null)
                 {
                     if (StudentsSummaryText != null)
@@ -330,49 +341,58 @@ namespace DrivingSchool.Views
                     return;
                 }
 
-                var studentFinancials = _students.Students
-                    .Select(student =>
+                // ИСПРАВЛЕНО: Правильный расчет финансов по студентам
+                var studentFinancials = new List<StudentFinancialInfo>();
+
+                foreach (var student in _students.Students)
+                {
+                    var tuition = _tuitions?.Tuitions?.FirstOrDefault(t => t.StudentId == student.Id);
+
+                    if (tuition == null) continue; // Пропускаем студентов без стоимости обучения
+
+                    var finalAmount = tuition.FullAmount - tuition.Discount;
+
+                    var allStudentPayments = _payments?.Payments?
+                        .Where(p => p.StudentId == student.Id)
+                        .ToList() ?? new List<Payment>();
+
+                    var studentPeriodPayments = periodPayments
+                        .Where(p => p.StudentId == student.Id)
+                        .ToList();
+
+                    var totalPaidAllTime = allStudentPayments.Sum(p => p.Amount);
+                    var paidInPeriod = studentPeriodPayments.Sum(p => p.Amount);
+                    var debt = finalAmount - totalPaidAllTime;
+
+                    studentFinancials.Add(new StudentFinancialInfo
                     {
-                        var tuition = _tuitions?.Tuitions?.FirstOrDefault(t => t.StudentId == student.Id);
+                        StudentId = student.Id,
+                        StudentName = student.FullName,
+                        GroupName = GetGroupName(student.GroupId),
+                        TotalToPay = finalAmount,
+                        TotalPaid = totalPaidAllTime,
+                        PaidInPeriod = paidInPeriod,
+                        Debt = debt,
+                        Status = GetPaymentStatus(debt, finalAmount)
+                    });
+                }
 
-                        var allStudentPayments = _payments?.Payments?
-                            .Where(p => p.StudentId == student.Id)
-                            .ToList() ?? new List<Payment>();
-
-                        var studentPeriodPayments = periodPayments
-                            .Where(p => p.StudentId == student.Id)
-                            .ToList();
-
-                        var totalToPay = tuition?.FinalAmount ?? 0;
-                        var totalPaidAllTime = allStudentPayments.Sum(p => p.Amount);
-                        var paidInPeriod = studentPeriodPayments.Sum(p => p.Amount);
-                        var debt = totalToPay - totalPaidAllTime;
-
-                        return new StudentFinancialInfo
-                        {
-                            StudentId = student.Id,
-                            StudentName = student.FullName,
-                            GroupName = GetGroupName(student.GroupId),
-                            TotalToPay = totalToPay,
-                            TotalPaid = totalPaidAllTime,
-                            PaidInPeriod = paidInPeriod,
-                            Debt = debt,
-                            Status = GetPaymentStatus(debt, totalPaidAllTime, totalToPay)
-                        };
-                    })
-                    .Where(s => s.TotalToPay > 0 || s.TotalPaid > 0)
-                    .OrderByDescending(s => s.Debt)
+                studentFinancials = studentFinancials
+                    .OrderByDescending(s => Math.Abs(s.Debt)) // Сортируем по модулю долга
                     .ToList();
 
                 if (StudentsDataGrid != null)
                     StudentsDataGrid.ItemsSource = studentFinancials;
 
                 var withDebt = studentFinancials.Count(s => s.Debt > 0);
+                var withOverpayment = studentFinancials.Count(s => s.Debt < 0);
                 var totalDebt = studentFinancials.Where(s => s.Debt > 0).Sum(s => s.Debt);
+                var totalOverpayment = studentFinancials.Where(s => s.Debt < 0).Sum(s => Math.Abs(s.Debt));
 
                 if (StudentsSummaryText != null)
                     StudentsSummaryText.Text = $"Студентов с оплатами: {studentFinancials.Count} | " +
-                                              $"С долгом: {withDebt} | Общий долг: {totalDebt:N2} руб.";
+                                              $"С долгом: {withDebt} ({totalDebt:N2} руб.) | " +
+                                              $"С переплатой: {withOverpayment} ({totalOverpayment:N2} руб.)";
             }
             catch (Exception ex)
             {
@@ -391,7 +411,6 @@ namespace DrivingSchool.Views
 
                 var periodPayments = GetPaymentsInPeriod(startDate, endDate);
 
-                // Проверка на null
                 if (_groups?.Groups == null || _students?.Students == null)
                 {
                     if (GroupsDataGrid != null)
@@ -399,43 +418,62 @@ namespace DrivingSchool.Views
                     return;
                 }
 
-                var groupFinancials = _groups.Groups
-                    .Select(group =>
+                // ИСПРАВЛЕНО: Правильный расчет финансов по группам
+                var groupFinancials = new List<GroupFinancialInfo>();
+
+                foreach (var group in _groups.Groups)
+                {
+                    var groupStudents = _students.Students
+                        .Where(s => s.GroupId == group.Id)
+                        .ToList();
+
+                    if (!groupStudents.Any()) continue;
+
+                    decimal expectedIncome = 0;
+                    decimal actualIncomeAllTime = 0;
+                    decimal actualIncomeInPeriod = 0;
+
+                    foreach (var student in groupStudents)
                     {
-                        var groupStudents = _students.Students
-                            .Where(s => s.GroupId == group.Id)
-                            .ToList();
+                        var tuition = _tuitions?.Tuitions?
+                            .FirstOrDefault(t => t.StudentId == student.Id);
 
-                        var groupTuitions = _tuitions?.Tuitions?
-                            .Where(t => groupStudents.Any(s => s.Id == t.StudentId))
-                            .ToList() ?? new List<StudentTuition>();
-
-                        var allGroupPayments = _payments?.Payments?
-                            .Where(p => groupStudents.Any(s => s.Id == p.StudentId))
-                            .ToList() ?? new List<Payment>();
-
-                        var groupPeriodPayments = periodPayments
-                            .Where(p => groupStudents.Any(s => s.Id == p.StudentId))
-                            .ToList();
-
-                        var expectedIncome = groupTuitions.Sum(t => t.FinalAmount);
-                        var actualIncomeAllTime = allGroupPayments.Sum(p => p.Amount);
-                        var actualIncomeInPeriod = groupPeriodPayments.Sum(p => p.Amount);
-                        var debt = expectedIncome - actualIncomeAllTime;
-
-                        return new GroupFinancialInfo
+                        if (tuition != null)
                         {
-                            GroupName = group.Name ?? "Без названия",
-                            StudentCount = groupStudents.Count,
-                            Status = group.Status ?? "Неизвестен",
-                            ExpectedIncome = expectedIncome,
-                            ActualIncome = actualIncomeInPeriod,
-                            ActualIncomeAllTime = actualIncomeAllTime,
-                            Debt = debt,
-                            CompletionRate = expectedIncome > 0 ? (actualIncomeAllTime / expectedIncome * 100) : 0
-                        };
-                    })
-                    .Where(g => g.StudentCount > 0)
+                            var finalAmount = tuition.FullAmount - tuition.Discount;
+                            expectedIncome += finalAmount;
+                        }
+
+                        var allStudentPayments = _payments?.Payments?
+                            .Where(p => p.StudentId == student.Id)
+                            .Sum(p => p.Amount) ?? 0;
+                        actualIncomeAllTime += allStudentPayments;
+
+                        var periodStudentPayments = periodPayments
+                            .Where(p => p.StudentId == student.Id)
+                            .Sum(p => p.Amount);
+                        actualIncomeInPeriod += periodStudentPayments;
+                    }
+
+                    var debt = expectedIncome - actualIncomeAllTime;
+                    var completionRate = expectedIncome > 0 ?
+                        (actualIncomeAllTime / expectedIncome * 100) : 0;
+
+                    groupFinancials.Add(new GroupFinancialInfo
+                    {
+                        GroupName = group.Name ?? "Без названия",
+                        StudentCount = groupStudents.Count,
+                        Status = group.Status ?? "Неизвестен",
+                        ExpectedIncome = expectedIncome,
+                        ActualIncome = actualIncomeInPeriod,
+                        ActualIncomeAllTime = actualIncomeAllTime,
+                        Debt = debt > 0 ? debt : 0, // Только положительный долг
+                        Overpayment = debt < 0 ? Math.Abs(debt) : 0,
+                        CompletionRate = completionRate
+                    });
+                }
+
+                groupFinancials = groupFinancials
                     .OrderByDescending(g => g.ActualIncome)
                     .ToList();
 
@@ -459,7 +497,6 @@ namespace DrivingSchool.Views
 
                 var periodPayments = GetPaymentsInPeriod(startDate, endDate);
 
-                // Проверка на null
                 if (_vehicleCategories?.Categories == null || _students?.Students == null)
                 {
                     if (CategoriesDataGrid != null)
@@ -467,44 +504,68 @@ namespace DrivingSchool.Views
                     return;
                 }
 
-                var categoriesReport = _vehicleCategories.Categories
-                    .Select(category =>
+                // ИСПРАВЛЕНО: Правильный расчет по категориям
+                var categoriesReport = new List<CategoryFinancialInfo>();
+
+                foreach (var category in _vehicleCategories.Categories)
+                {
+                    var categoryStudents = _students.Students
+                        .Where(s => s.VehicleCategoryId == category.Id)
+                        .ToList();
+
+                    if (!categoryStudents.Any()) continue;
+
+                    decimal expectedIncome = 0;
+                    decimal actualIncomeAllTime = 0;
+                    decimal actualIncomeInPeriod = 0;
+
+                    foreach (var student in categoryStudents)
                     {
-                        var categoryStudents = _students.Students
-                            .Where(s => s.VehicleCategoryId == category.Id)
-                            .ToList();
+                        var tuition = _tuitions?.Tuitions?
+                            .FirstOrDefault(t => t.StudentId == student.Id);
 
-                        var categoryTuitions = _tuitions?.Tuitions?
-                            .Where(t => categoryStudents.Any(s => s.Id == t.StudentId))
-                            .ToList() ?? new List<StudentTuition>();
-
-                        var categoryPeriodPayments = periodPayments
-                            .Where(p => categoryStudents.Any(s => s.Id == p.StudentId))
-                            .ToList();
-
-                        var expectedIncome = categoryTuitions.Sum(t => t.FinalAmount);
-                        var actualIncome = categoryPeriodPayments.Sum(p => p.Amount);
-
-                        var allPayments = _payments?.Payments?
-                            .Where(p => categoryStudents.Any(s => s.Id == p.StudentId))
-                            .Sum(p => p.Amount) ?? 0;
-
-                        var debt = expectedIncome - allPayments;
-
-                        var averagePayment = categoryPeriodPayments.Any() ?
-                            categoryPeriodPayments.Average(p => p.Amount) : 0;
-
-                        return new CategoryFinancialInfo
+                        if (tuition != null)
                         {
-                            CategoryName = $"{category.Code} - {category.FullName}",
-                            StudentCount = categoryStudents.Count,
-                            ExpectedIncome = expectedIncome,
-                            ActualIncome = actualIncome,
-                            Debt = debt,
-                            AveragePayment = averagePayment
-                        };
-                    })
-                    .Where(c => c.StudentCount > 0)
+                            var finalAmount = tuition.FullAmount - tuition.Discount;
+                            expectedIncome += finalAmount;
+                        }
+
+                        var allStudentPayments = _payments?.Payments?
+                            .Where(p => p.StudentId == student.Id)
+                            .Sum(p => p.Amount) ?? 0;
+                        actualIncomeAllTime += allStudentPayments;
+
+                        var periodStudentPayments = periodPayments
+                            .Where(p => p.StudentId == student.Id)
+                            .Sum(p => p.Amount);
+                        actualIncomeInPeriod += periodStudentPayments;
+                    }
+
+                    var debt = expectedIncome - actualIncomeAllTime;
+
+                    // ИСПРАВЛЕНО: Средняя стоимость обучения, а не средний платеж
+                    var averageTuitionCost = categoryStudents
+                        .Select(s => _tuitions?.Tuitions?
+                            .FirstOrDefault(t => t.StudentId == s.Id))
+                        .Where(t => t != null)
+                        .Select(t => t.FullAmount - t.Discount)
+                        .DefaultIfEmpty(0)
+                        .Average();
+
+                    categoriesReport.Add(new CategoryFinancialInfo
+                    {
+                        CategoryName = $"{category.Code} - {category.FullName}",
+                        StudentCount = categoryStudents.Count,
+                        ExpectedIncome = expectedIncome,
+                        ActualIncome = actualIncomeInPeriod,
+                        Debt = debt > 0 ? debt : 0,
+                        AverageTuitionCost = averageTuitionCost,
+                        CompletionRate = expectedIncome > 0 ?
+                            (actualIncomeAllTime / expectedIncome * 100) : 0
+                    });
+                }
+
+                categoriesReport = categoriesReport
                     .OrderByDescending(c => c.ActualIncome)
                     .ToList();
 
@@ -513,10 +574,12 @@ namespace DrivingSchool.Views
 
                 var totalStudents = categoriesReport.Sum(c => c.StudentCount);
                 var totalIncome = categoriesReport.Sum(c => c.ActualIncome);
+                var totalDebt = categoriesReport.Sum(c => c.Debt);
 
                 if (CategoriesSummaryText != null)
-                    CategoriesSummaryText.Text = $"Всего студентов по категориям: {totalStudents} | " +
-                                                $"Доход за период: {totalIncome:N2} руб.";
+                    CategoriesSummaryText.Text = $"Всего студентов: {totalStudents} | " +
+                                                $"Доход за период: {totalIncome:N2} руб. | " +
+                                                $"Долг: {totalDebt:N2} руб.";
             }
             catch (Exception ex)
             {
@@ -544,12 +607,13 @@ namespace DrivingSchool.Views
             return group?.Name ?? "Не назначена";
         }
 
-        private string GetPaymentStatus(decimal debt, decimal totalPaid, decimal totalToPay)
+        // ИСПРАВЛЕНО: Правильное определение статуса оплаты
+        private string GetPaymentStatus(decimal debt, decimal totalToPay)
         {
             if (totalToPay == 0) return "Нет стоимости";
-            if (debt <= 0) return "Оплачено полностью";
-            if (totalPaid == 0) return "Не оплачено";
-            return "Частично оплачено";
+            if (debt > 0) return "Неполная оплата";
+            if (debt < 0) return "Переплата";
+            return "Полная оплата";
         }
 
         private void GenerateReportButton_Click(object sender, RoutedEventArgs e)
@@ -570,7 +634,6 @@ namespace DrivingSchool.Views
                     return;
                 }
 
-                // Проверяем, выбран ли TabControl и его индекс
                 if (ReportTypeTabControl == null)
                     return;
 
@@ -602,7 +665,7 @@ namespace DrivingSchool.Views
         }
     }
 
-    // Вспомогательные классы для отчетов (оставляем без изменений)
+    // ИСПРАВЛЕНО: Добавлены новые поля в классы для отчетов
     public class PaymentDetail
     {
         public int Id { get; set; }
@@ -637,7 +700,8 @@ namespace DrivingSchool.Views
         public string TotalToPayString => $"{TotalToPay:N2} руб.";
         public string TotalPaidString => $"{TotalPaid:N2} руб.";
         public string PaidInPeriodString => $"{PaidInPeriod:N2} руб.";
-        public string DebtString => $"{Debt:N2} руб.";
+        public string DebtString => $"{(Debt > 0 ? Debt : 0):N2} руб.";
+        public string OverpaymentString => $"{(Debt < 0 ? -Debt : 0):N2} руб.";
     }
 
     public class GroupFinancialInfo
@@ -649,12 +713,14 @@ namespace DrivingSchool.Views
         public decimal ActualIncome { get; set; }
         public decimal ActualIncomeAllTime { get; set; }
         public decimal Debt { get; set; }
+        public decimal Overpayment { get; set; }
         public decimal CompletionRate { get; set; }
 
         public string ExpectedIncomeString => $"{ExpectedIncome:N2} руб.";
         public string ActualIncomeString => $"{ActualIncome:N2} руб.";
         public string ActualIncomeAllTimeString => $"{ActualIncomeAllTime:N2} руб.";
         public string DebtString => $"{Debt:N2} руб.";
+        public string OverpaymentString => $"{Overpayment:N2} руб.";
         public string CompletionRateString => $"{CompletionRate:N1}%";
     }
 
@@ -665,11 +731,13 @@ namespace DrivingSchool.Views
         public decimal ExpectedIncome { get; set; }
         public decimal ActualIncome { get; set; }
         public decimal Debt { get; set; }
-        public decimal AveragePayment { get; set; }
+        public decimal AverageTuitionCost { get; set; }
+        public decimal CompletionRate { get; set; }
 
         public string ExpectedIncomeString => $"{ExpectedIncome:N2} руб.";
         public string ActualIncomeString => $"{ActualIncome:N2} руб.";
         public string DebtString => $"{Debt:N2} руб.";
-        public string AveragePaymentString => $"{AveragePayment:N2} руб.";
+        public string AverageTuitionCostString => $"{AverageTuitionCost:N2} руб.";
+        public string CompletionRateString => $"{CompletionRate:N1}%";
     }
 }

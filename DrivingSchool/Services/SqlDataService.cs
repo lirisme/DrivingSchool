@@ -1,9 +1,10 @@
-﻿using System;
+﻿using DrivingSchool.Models;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
+using System.Diagnostics;
 using System.Linq;
-using DrivingSchool.Models;
 
 namespace DrivingSchool.Services
 {
@@ -43,7 +44,7 @@ namespace DrivingSchool.Services
 
 
         /// <summary>
-        /// Загрузка всех студентов
+        /// Загрузка всех студентов с информацией о стоимости обучения
         /// </summary>
         public StudentCollection LoadStudents()
         {
@@ -60,12 +61,19 @@ namespace DrivingSchool.Services
                        vc.FullName as CategoryName,
                        sg.Name as GroupName,
                        e.LastName + ' ' + e.FirstName as InstructorName,
-                       c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo
+                       c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
+                       t.Name as TariffName,
+                       ISNULL((
+                           SELECT SUM(Amount) 
+                           FROM Payments p 
+                           WHERE p.StudentId = s.Id
+                       ), 0) as PaidAmount
                 FROM Students s
                 LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
                 LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
                 LEFT JOIN Employees e ON s.InstructorId = e.Id
                 LEFT JOIN Cars c ON s.CarId = c.Id
+                LEFT JOIN Tariffs t ON s.TariffId = t.Id
                 ORDER BY s.LastName, s.FirstName", conn);
 
                     using (var reader = cmd.ExecuteReader())
@@ -80,8 +88,6 @@ namespace DrivingSchool.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Ошибка загрузки студентов: {ex.Message}");
-                // НЕ выкидываем исключение, а возвращаем пустую коллекцию
-                // throw new Exception($"Ошибка загрузки студентов: {ex.Message}");
             }
 
             return collection;
@@ -98,18 +104,25 @@ namespace DrivingSchool.Services
                 {
                     conn.Open();
                     var cmd = new SqlCommand(@"
-                        SELECT s.*, 
-                               vc.Code as CategoryCode,
-                               vc.FullName as CategoryName,
-                               sg.Name as GroupName,
-                               e.LastName + ' ' + e.FirstName as InstructorName,
-                               c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo
-                        FROM Students s
-                        LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
-                        LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
-                        LEFT JOIN Employees e ON s.InstructorId = e.Id
-                        LEFT JOIN Cars c ON s.CarId = c.Id
-                        WHERE s.Id = @Id", conn);
+                SELECT s.*, 
+                       vc.Code as CategoryCode,
+                       vc.FullName as CategoryName,
+                       sg.Name as GroupName,
+                       e.LastName + ' ' + e.FirstName as InstructorName,
+                       c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
+                       t.Name as TariffName,
+                       ISNULL((
+                           SELECT SUM(Amount) 
+                           FROM Payments p 
+                           WHERE p.StudentId = s.Id
+                       ), 0) as PaidAmount
+                FROM Students s
+                LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
+                LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
+                LEFT JOIN Employees e ON s.InstructorId = e.Id
+                LEFT JOIN Cars c ON s.CarId = c.Id
+                LEFT JOIN Tariffs t ON s.TariffId = t.Id
+                WHERE s.Id = @Id", conn);
 
                     cmd.Parameters.AddWithValue("@Id", id);
 
@@ -141,56 +154,107 @@ namespace DrivingSchool.Services
                 using (var conn = GetConnection())
                 {
                     conn.Open();
+                    int studentId;
 
                     if (student.Id > 0)
                     {
                         // Обновление
                         var cmd = new SqlCommand(@"
-                            UPDATE Students 
-                            SET LastName = @LastName, 
-                                FirstName = @FirstName, 
-                                MiddleName = @MiddleName,
-                                BirthDate = @BirthDate, 
-                                BirthPlace = @BirthPlace, 
-                                Phone = @Phone,
-                                Email = @Email, 
-                                Citizenship = @Citizenship, 
-                                Gender = @Gender,
-                                GroupId = @GroupId, 
-                                VehicleCategoryId = @VehicleCategoryId,
-                                InstructorId = @InstructorId, 
-                                CarId = @CarId,
-                                ModifiedDate = GETDATE()
-                            WHERE Id = @Id", conn);
+                    UPDATE Students 
+                    SET LastName = @LastName, 
+                        FirstName = @FirstName, 
+                        MiddleName = @MiddleName,
+                        BirthDate = @BirthDate, 
+                        BirthPlace = @BirthPlace, 
+                        Phone = @Phone,
+                        Email = @Email, 
+                        Citizenship = @Citizenship, 
+                        Gender = @Gender,
+                        GroupId = @GroupId, 
+                        VehicleCategoryId = @VehicleCategoryId,
+                        InstructorId = @InstructorId, 
+                        CarId = @CarId,
+                        TuitionAmount = @TuitionAmount,
+                        DiscountAmount = @DiscountAmount,
+                        TariffId = @TariffId,
+                        ModifiedDate = GETDATE()
+                    WHERE Id = @Id", conn);
 
                         AddStudentParameters(cmd, student);
                         cmd.Parameters.AddWithValue("@Id", student.Id);
-
                         cmd.ExecuteNonQuery();
-                        return student.Id;
+                        studentId = student.Id;
                     }
                     else
                     {
                         // Вставка нового студента
                         var cmd = new SqlCommand(@"
-                            INSERT INTO Students 
-                            (LastName, FirstName, MiddleName, BirthDate, BirthPlace, Phone, Email, 
-                             Citizenship, Gender, GroupId, VehicleCategoryId, InstructorId, CarId, CreatedDate)
-                            OUTPUT INSERTED.Id
-                            VALUES 
-                            (@LastName, @FirstName, @MiddleName, @BirthDate, @BirthPlace, @Phone, @Email,
-                             @Citizenship, @Gender, @GroupId, @VehicleCategoryId, @InstructorId, @CarId, GETDATE())", conn);
+                    INSERT INTO Students 
+                    (LastName, FirstName, MiddleName, BirthDate, BirthPlace, Phone, Email, 
+                     Citizenship, Gender, GroupId, VehicleCategoryId, InstructorId, CarId,
+                     TuitionAmount, DiscountAmount, TariffId, CreatedDate)
+                    OUTPUT INSERTED.Id
+                    VALUES 
+                    (@LastName, @FirstName, @MiddleName, @BirthDate, @BirthPlace, @Phone, @Email,
+                     @Citizenship, @Gender, @GroupId, @VehicleCategoryId, @InstructorId, @CarId,
+                     @TuitionAmount, @DiscountAmount, @TariffId, GETDATE())", conn);
 
                         AddStudentParameters(cmd, student);
-
-                        return (int)cmd.ExecuteScalar();
+                        studentId = (int)cmd.ExecuteScalar();
                     }
+
+                    // Синхронизация с StudentTuitions
+                    SyncStudentTuition(conn, studentId, student.TuitionAmount, student.DiscountAmount, student.TariffId);
+
+                    return studentId;
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Ошибка сохранения студента: {ex.Message}");
                 throw new Exception($"Ошибка сохранения студента: {ex.Message}");
+            }
+        }
+
+        private void SyncStudentTuition(SqlConnection conn, int studentId, decimal tuitionAmount, decimal discountAmount, int? tariffId)
+        {
+            // Проверяем, есть ли запись в StudentTuitions
+            var checkCmd = new SqlCommand("SELECT COUNT(*) FROM StudentTuitions WHERE StudentId = @StudentId", conn);
+            checkCmd.Parameters.AddWithValue("@StudentId", studentId);
+
+            int exists = (int)checkCmd.ExecuteScalar();
+
+            if (exists > 0)
+            {
+                // Обновляем существующую запись
+                var cmd = new SqlCommand(@"
+            UPDATE StudentTuitions 
+            SET FullAmount = @FullAmount, 
+                Discount = @Discount,
+                TariffId = @TariffId,
+                ModifiedDate = GETDATE()
+            WHERE StudentId = @StudentId", conn);
+
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+                cmd.Parameters.AddWithValue("@FullAmount", tuitionAmount);
+                cmd.Parameters.AddWithValue("@Discount", discountAmount);
+                cmd.Parameters.AddWithValue("@TariffId", tariffId.HasValue ? (object)tariffId.Value : DBNull.Value);
+
+                cmd.ExecuteNonQuery();
+            }
+            else if (tuitionAmount > 0 || discountAmount > 0 || tariffId.HasValue)
+            {
+                // Создаем новую запись только если есть данные
+                var cmd = new SqlCommand(@"
+            INSERT INTO StudentTuitions (StudentId, FullAmount, Discount, TariffId, CreatedDate)
+            VALUES (@StudentId, @FullAmount, @Discount, @TariffId, GETDATE())", conn);
+
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+                cmd.Parameters.AddWithValue("@FullAmount", tuitionAmount);
+                cmd.Parameters.AddWithValue("@Discount", discountAmount);
+                cmd.Parameters.AddWithValue("@TariffId", tariffId.HasValue ? (object)tariffId.Value : DBNull.Value);
+
+                cmd.ExecuteNonQuery();
             }
         }
 
@@ -296,7 +360,13 @@ namespace DrivingSchool.Services
                     CategoryName = reader["CategoryName"]?.ToString() ?? "",
                     GroupName = reader["GroupName"]?.ToString() ?? "",
                     InstructorName = reader["InstructorName"]?.ToString() ?? "",
-                    CarInfo = reader["CarInfo"]?.ToString() ?? ""
+                    CarInfo = reader["CarInfo"]?.ToString() ?? "",
+                    // Добавьте в метод MapStudent после существующих полей:
+                    TuitionAmount = reader["TuitionAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TuitionAmount"]) : 0,
+                    DiscountAmount = reader["DiscountAmount"] != DBNull.Value ? Convert.ToDecimal(reader["DiscountAmount"]) : 0,
+                    TariffId = reader["TariffId"] as int?,
+                    TariffName = reader["TariffName"]?.ToString() ?? "",
+                    PaidAmount = reader["PaidAmount"] != DBNull.Value ? Convert.ToDecimal(reader["PaidAmount"]) : 0,
                 };
             }
             catch (Exception ex)
@@ -321,6 +391,10 @@ namespace DrivingSchool.Services
             cmd.Parameters.AddWithValue("@VehicleCategoryId", student.VehicleCategoryId > 0 ? (object)student.VehicleCategoryId : DBNull.Value);
             cmd.Parameters.AddWithValue("@InstructorId", student.InstructorId > 0 ? (object)student.InstructorId : DBNull.Value);
             cmd.Parameters.AddWithValue("@CarId", student.CarId > 0 ? (object)student.CarId : DBNull.Value);
+            // Добавьте в конец метода AddStudentParameters:
+            cmd.Parameters.AddWithValue("@TuitionAmount", student.TuitionAmount);
+            cmd.Parameters.AddWithValue("@DiscountAmount", student.DiscountAmount);
+            cmd.Parameters.AddWithValue("@TariffId", student.TariffId.HasValue && student.TariffId.Value > 0 ? (object)student.TariffId.Value : DBNull.Value);
         }
 
 
@@ -1164,28 +1238,40 @@ namespace DrivingSchool.Services
                 {
                     conn.Open();
 
+                    // ИСПРАВЛЕНО: Используем FullAmount и Discount вместо FinalAmount
                     var cmd = new SqlCommand(@"
                         SELECT 
                             s.Id,
                             s.LastName + ' ' + s.FirstName + ISNULL(' ' + s.MiddleName, '') AS StudentName,
                             s.Phone,
                             sg.Name AS GroupName,
-                            st.FullAmount,
-                            st.Discount,
-                            st.FinalAmount,
-                            ISNULL(SUM(p.Amount), 0) AS Paid,
-                            st.FinalAmount - ISNULL(SUM(p.Amount), 0) AS Debt
+                            ISNULL(st.FullAmount, 0) AS FullAmount,
+                            ISNULL(st.Discount, 0) AS Discount,
+                            ISNULL(st.FullAmount, 0) - ISNULL(st.Discount, 0) AS FinalAmount,
+                            ISNULL((
+                                SELECT SUM(p.Amount) 
+                                FROM Payments p 
+                                WHERE p.StudentId = s.Id
+                            ), 0) AS Paid,
+                            (ISNULL(st.FullAmount, 0) - ISNULL(st.Discount, 0)) - 
+                            ISNULL((
+                                SELECT SUM(p.Amount) 
+                                FROM Payments p 
+                                WHERE p.StudentId = s.Id
+                            ), 0) AS Debt
                         FROM Students s
                         LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
                         LEFT JOIN StudentTuitions st ON s.Id = st.StudentId
-                        LEFT JOIN Payments p ON s.Id = p.StudentId
-                        WHERE st.FinalAmount IS NOT NULL
-                        GROUP BY s.Id, s.LastName, s.FirstName, s.MiddleName, s.Phone, 
-                                 sg.Name, st.FullAmount, st.Discount, st.FinalAmount
-                        HAVING st.FinalAmount - ISNULL(SUM(p.Amount), 0) > @MinDebt
+                        WHERE st.FullAmount IS NOT NULL
+                        HAVING (ISNULL(st.FullAmount, 0) - ISNULL(st.Discount, 0)) - 
+                               ISNULL((
+                                   SELECT SUM(p.Amount) 
+                                   FROM Payments p 
+                                   WHERE p.StudentId = s.Id
+                               ), 0) > @MinDebt
                         ORDER BY Debt DESC", conn);
 
-                    cmd.Parameters.AddWithValue("@MinDebt", minDebt);
+                    cmd.Parameters.Add("@MinDebt", SqlDbType.Decimal).Value = minDebt;
 
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -1229,6 +1315,7 @@ namespace DrivingSchool.Services
                 {
                     conn.Open();
 
+                    // ИСПРАВЛЕНО: Более эффективный и правильный запрос
                     var cmd = new SqlCommand(@"
                         SELECT 
                             (SELECT COUNT(*) FROM Students) as StudentsCount,
@@ -1238,8 +1325,21 @@ namespace DrivingSchool.Services
                             (SELECT COUNT(*) FROM Payments) as PaymentsCount,
                             (SELECT ISNULL(SUM(Amount), 0) FROM Payments) as TotalPayments,
                             (SELECT COUNT(*) FROM Students WHERE GroupId IS NOT NULL) as StudentsInGroups,
-                            (SELECT ISNULL(SUM(FinalAmount - ISNULL((SELECT SUM(Amount) FROM Payments p WHERE p.StudentId = st.StudentId), 0)), 0) 
-                             FROM StudentTuitions st) as TotalDebt", conn);
+                            (SELECT ISNULL(SUM(
+                                (ISNULL(st.FullAmount, 0) - ISNULL(st.Discount, 0)) - 
+                                ISNULL((
+                                    SELECT SUM(p.Amount) 
+                                    FROM Payments p 
+                                    WHERE p.StudentId = st.StudentId
+                                ), 0)
+                            ), 0) 
+                             FROM StudentTuitions st
+                             WHERE (ISNULL(st.FullAmount, 0) - ISNULL(st.Discount, 0)) > 
+                                   ISNULL((
+                                       SELECT SUM(p.Amount) 
+                                       FROM Payments p 
+                                       WHERE p.StudentId = st.StudentId
+                                   ), 0)) as TotalDebt", conn);
 
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -2347,54 +2447,65 @@ namespace DrivingSchool.Services
             }
 
 
-            /// <summary>
-            /// Загрузка всех стоимостей обучения
-            /// </summary>
-            public StudentTuitionCollection LoadStudentTuitions()
+        /// <summary>
+        /// Загрузка всех стоимостей обучения
+        /// </summary>
+        public StudentTuitionCollection LoadStudentTuitions()
+        {
+            var collection = new StudentTuitionCollection { Tuitions = new List<StudentTuition>() };
+
+            try
             {
-                var collection = new StudentTuitionCollection { Tuitions = new List<StudentTuition>() };
-
-                try
+                using (var conn = GetConnection())
                 {
-                    using (var conn = GetConnection())
-                    {
-                        conn.Open();
-                        var cmd = new SqlCommand(@"
-                SELECT t.*, s.LastName + ' ' + s.FirstName + ISNULL(' ' + s.MiddleName, '') as StudentName,
-                       tar.Name as TariffName
-                FROM StudentTuitions t
-                JOIN Students s ON t.StudentId = s.Id
-                LEFT JOIN Tariffs tar ON t.TariffId = tar.Id
-                ORDER BY s.LastName, s.FirstName", conn);
+                    conn.Open();
+                    // ИСПРАВЛЕНО: Убрали FinalAmount из запроса
+                    var cmd = new SqlCommand(@"
+                        SELECT t.*, 
+                               s.LastName + ' ' + s.FirstName + ISNULL(' ' + s.MiddleName, '') as StudentName,
+                               tar.Name as TariffName,
+                               ISNULL((
+                                   SELECT SUM(p.Amount) 
+                                   FROM Payments p 
+                                   WHERE p.StudentId = t.StudentId
+                               ), 0) as PaidAmount
+                        FROM StudentTuitions t
+                        JOIN Students s ON t.StudentId = s.Id
+                        LEFT JOIN Tariffs tar ON t.TariffId = tar.Id
+                        ORDER BY s.LastName, s.FirstName", conn);
 
-                        using (var reader = cmd.ExecuteReader())
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
                         {
-                            while (reader.Read())
+                            var tuition = new StudentTuition
                             {
-                                collection.Tuitions.Add(new StudentTuition
-                                {
-                                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                                    StudentId = reader.GetInt32(reader.GetOrdinal("StudentId")),
-                                    TariffId = reader["TariffId"] as int?,
-                                    FullAmount = reader.GetDecimal(reader.GetOrdinal("FullAmount")),
-                                    Discount = reader.GetDecimal(reader.GetOrdinal("Discount")),
-                                    CreatedDate = reader["CreatedDate"] as DateTime? ?? DateTime.Now,
-                                    ModifiedDate = reader["ModifiedDate"] as DateTime?,
-                                    StudentName = reader["StudentName"]?.ToString() ?? "",
-                                    TariffName = reader["TariffName"]?.ToString() ?? ""
-                                });
-                            }
+                                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                                StudentId = reader.GetInt32(reader.GetOrdinal("StudentId")),
+                                TariffId = reader["TariffId"] as int?,
+                                FullAmount = reader.GetDecimal(reader.GetOrdinal("FullAmount")),
+                                Discount = reader.GetDecimal(reader.GetOrdinal("Discount")),
+                                CreatedDate = reader["CreatedDate"] as DateTime? ?? DateTime.Now,
+                                ModifiedDate = reader["ModifiedDate"] as DateTime?,
+                                StudentName = reader["StudentName"]?.ToString() ?? "",
+                                TariffName = reader["TariffName"]?.ToString() ?? "",
+                                PaidAmount = reader.GetDecimal(reader.GetOrdinal("PaidAmount"))
+                            };
+
+                            collection.Tuitions.Add(tuition);
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Ошибка загрузки стоимостей обучения: {ex.Message}");
-                    throw new Exception($"Ошибка загрузки стоимостей обучения: {ex.Message}");
-                }
-
-                return collection;
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки стоимостей обучения: {ex.Message}");
+                throw new Exception($"Ошибка загрузки стоимостей обучения: {ex.Message}");
+            }
+
+            return collection;
+        }
+    
 
 
             /// <summary>
@@ -2527,6 +2638,160 @@ namespace DrivingSchool.Services
                 throw new Exception($"Ошибка удаления тарифа: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Обновление стоимости обучения студента
+        /// </summary>
+        public void UpdateStudentTuition(int studentId, decimal tuitionAmount, decimal discountAmount, int? tariffId = null)
+        {
+            try
+            {
+                using (var conn = GetConnection())
+                {
+                    conn.Open();
+                    var cmd = new SqlCommand(@"
+                UPDATE Students 
+                SET TuitionAmount = @TuitionAmount,
+                    DiscountAmount = @DiscountAmount,
+                    TariffId = @TariffId,
+                    ModifiedDate = GETDATE()
+                WHERE Id = @StudentId", conn);
+
+                    cmd.Parameters.AddWithValue("@StudentId", studentId);
+                    cmd.Parameters.AddWithValue("@TuitionAmount", tuitionAmount);
+                    cmd.Parameters.AddWithValue("@DiscountAmount", discountAmount);
+                    cmd.Parameters.AddWithValue("@TariffId", tariffId.HasValue && tariffId.Value > 0 ? (object)tariffId.Value : DBNull.Value);
+
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка обновления стоимости обучения: {ex.Message}");
+                throw new Exception($"Ошибка обновления стоимости обучения: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Получение информации о платежах и остатке для студента
+        /// </summary>
+        public (decimal tuition, decimal discount, decimal paid, decimal final, decimal remaining) GetStudentPaymentInfo(int studentId)
+        {
+            try
+            {
+                using (var conn = GetConnection())
+                {
+                    conn.Open();
+                    var cmd = new SqlCommand(@"
+        SELECT 
+            ISNULL(st.FullAmount, s.TuitionAmount) as TuitionAmount,
+            ISNULL(st.Discount, s.DiscountAmount) as DiscountAmount,
+            ISNULL((
+                SELECT SUM(Amount) 
+                FROM Payments p 
+                WHERE p.StudentId = s.Id
+            ), 0) as PaidAmount,
+            t.Name as TariffName
+        FROM Students s
+        LEFT JOIN StudentTuitions st ON s.Id = st.StudentId
+        LEFT JOIN Tariffs t ON ISNULL(st.TariffId, s.TariffId) = t.Id
+        WHERE s.Id = @StudentId", conn);
+
+                    cmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            var tuition = reader["TuitionAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TuitionAmount"]) : 0;
+                            var discount = reader["DiscountAmount"] != DBNull.Value ? Convert.ToDecimal(reader["DiscountAmount"]) : 0;
+                            var paid = reader["PaidAmount"] != DBNull.Value ? Convert.ToDecimal(reader["PaidAmount"]) : 0;
+                            var final = tuition - discount;
+                            var remaining = final - paid;
+
+                            Debug.WriteLine($"GetStudentPaymentInfo: tuition={tuition}, discount={discount}, paid={paid}, final={final}, remaining={remaining}");
+
+                            return (tuition, discount, paid, final, remaining > 0 ? remaining : 0);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка получения информации о платежах: {ex.Message}");
+            }
+
+            return (0, 0, 0, 0, 0);
+        }
+
+        /// <summary>
+        /// Обновление стоимости обучения студента
+        /// </summary>
+        public void UpdateStudentTuition(int studentId, decimal tuitionAmount, decimal discountAmount)
+        {
+            try
+            {
+                using (var conn = GetConnection())
+                {
+                    conn.Open();
+
+                    // Проверяем, есть ли запись в StudentTuitions
+                    var checkCmd = new SqlCommand("SELECT COUNT(*) FROM StudentTuitions WHERE StudentId = @StudentId", conn);
+                    checkCmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                    int exists = (int)checkCmd.ExecuteScalar();
+
+                    if (exists > 0)
+                    {
+                        // Обновляем существующую запись
+                        var cmd = new SqlCommand(@"
+                    UPDATE StudentTuitions 
+                    SET FullAmount = @FullAmount, 
+                        Discount = @Discount,
+                        ModifiedDate = GETDATE()
+                    WHERE StudentId = @StudentId", conn);
+
+                        cmd.Parameters.AddWithValue("@StudentId", studentId);
+                        cmd.Parameters.AddWithValue("@FullAmount", tuitionAmount);
+                        cmd.Parameters.AddWithValue("@Discount", discountAmount);
+
+                        cmd.ExecuteNonQuery();
+                    }
+                    else
+                    {
+                        // Создаем новую запись
+                        var cmd = new SqlCommand(@"
+                    INSERT INTO StudentTuitions (StudentId, FullAmount, Discount, CreatedDate)
+                    VALUES (@StudentId, @FullAmount, @Discount, GETDATE())", conn);
+
+                        cmd.Parameters.AddWithValue("@StudentId", studentId);
+                        cmd.Parameters.AddWithValue("@FullAmount", tuitionAmount);
+                        cmd.Parameters.AddWithValue("@Discount", discountAmount);
+
+                        cmd.ExecuteNonQuery();
+                    }
+
+                    // Также обновляем поля в Students для обратной совместимости
+                    var updateStudentCmd = new SqlCommand(@"
+                UPDATE Students 
+                SET TuitionAmount = @TuitionAmount,
+                    DiscountAmount = @DiscountAmount,
+                    ModifiedDate = GETDATE()
+                WHERE Id = @StudentId", conn);
+
+                    updateStudentCmd.Parameters.AddWithValue("@StudentId", studentId);
+                    updateStudentCmd.Parameters.AddWithValue("@TuitionAmount", tuitionAmount);
+                    updateStudentCmd.Parameters.AddWithValue("@DiscountAmount", discountAmount);
+
+                    updateStudentCmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка обновления стоимости обучения: {ex.Message}");
+                throw new Exception($"Ошибка обновления стоимости обучения: {ex.Message}");
+            }
+        }
     } // <-- Закрывающая скобка класса SqlDataService (СТРОКА 2559)
 
     public class DebtInfo
@@ -2541,9 +2806,29 @@ namespace DrivingSchool.Services
         public decimal Paid { get; set; }
         public decimal Debt { get; set; }
 
-        public string DebtStatus => Debt <= 0 ? "Оплачено" : "Долг";
-        public string DebtColor => Debt <= 0 ? "Green" : "Red";
-        public string DebtFormatted => $"{Debt:N2} руб.";
+        // ИСПРАВЛЕНО: Правильные статусы
+        public string DebtStatus
+        {
+            get
+            {
+                if (Debt > 0) return "Долг";
+                if (Debt < 0) return "Переплата";
+                return "Оплачено";
+            }
+        }
+
+        public string DebtColor
+        {
+            get
+            {
+                if (Debt > 0) return "Red";
+                if (Debt < 0) return "Orange";
+                return "Green";
+            }
+        }
+
+        public string DebtFormatted => $"{(Debt > 0 ? Debt : 0):N2} руб.";
+        public string OverpaymentFormatted => $"{(Debt < 0 ? -Debt : 0):N2} руб.";
         public string PaidFormatted => $"{Paid:N2} руб.";
         public string FinalAmountFormatted => $"{FinalAmount:N2} руб.";
     }
@@ -2561,5 +2846,37 @@ namespace DrivingSchool.Services
 
         public string TotalPaymentsFormatted => $"{TotalPayments:N2} руб.";
         public string TotalDebtFormatted => $"{TotalDebt:N2} руб.";
+    }
+
+    /// <summary>
+    /// Класс для информации о долгах студентов
+    /// </summary>
+    public class StudentDebtInfo
+    {
+        public int StudentId { get; set; }
+        public string StudentName { get; set; }
+        public string Phone { get; set; }
+        public string GroupName { get; set; }
+        public string CategoryCode { get; set; }
+        public decimal TuitionAmount { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal FinalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal DebtAmount { get; set; }
+
+        public int PaymentProgress
+        {
+            get
+            {
+                if (FinalAmount == 0) return 0;
+                var progress = (int)((PaidAmount / FinalAmount) * 100);
+                return Math.Min(100, Math.Max(0, progress));
+            }
+        }
+
+        public string DebtStatus => DebtAmount > 0 ? $"Долг: {DebtAmount:N2} руб." : "Оплачено";
+        public string FinalAmountFormatted => $"{FinalAmount:N2} руб.";
+        public string PaidAmountFormatted => $"{PaidAmount:N2} руб.";
+        public string DebtAmountFormatted => $"{DebtAmount:N2} руб.";
     }
 } // <-- Закрывающая скобка namespace

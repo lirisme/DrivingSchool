@@ -4,12 +4,15 @@ using System.Windows;
 using System.Windows.Controls;
 using DrivingSchool.Models;
 using DrivingSchool.Services;
+using System.Collections.Generic;
+using System.Globalization;
 
 namespace DrivingSchool.Views
 {
     public partial class StudentEditDialog : Window
     {
         private readonly SqlDataService _dataService;
+        private TariffCollection _tariffs;
         public Student StudentData { get; private set; }
 
         public StudentEditDialog(SqlDataService dataService, Student studentData = null)
@@ -28,7 +31,9 @@ namespace DrivingSchool.Views
                 {
                     BirthDate = DateTime.Now.AddYears(-18),
                     Citizenship = "Российская Федерация",
-                    Gender = "Мужской"
+                    Gender = "Мужской",
+                    TuitionAmount = 0,
+                    DiscountAmount = 0
                 };
                 Title = "Добавление учащегося";
             }
@@ -36,9 +41,19 @@ namespace DrivingSchool.Views
             DataContext = StudentData;
             LoadGroups();
             LoadCategories();
+            LoadTariffs();
             LoadInstructors();
             LoadCars();
+
+            // Подписываемся на событие выбора категории
+            CategoryComboBox.SelectionChanged += CategoryComboBox_SelectionChanged;
+            // Подписываемся на событие выбора тарифа для обновления стоимости
+            TariffComboBox.SelectionChanged += TariffComboBox_SelectionChanged;
+
             BirthDatePicker.SelectedDateChanged += BirthDateChanged;
+
+            // Обновляем отображение итоговой суммы
+            UpdateFinalAmount();
         }
 
         private void LoadGroups()
@@ -93,6 +108,156 @@ namespace DrivingSchool.Views
             {
                 System.Diagnostics.Debug.WriteLine($"Ошибка загрузки категорий: {ex.Message}");
                 CategoryComboBox.ItemsSource = new[] { new { Id = 0, DisplayText = "Ошибка загрузки" } };
+            }
+        }
+
+        private void LoadTariffs()
+        {
+            try
+            {
+                _tariffs = _dataService.LoadTariffs();
+                var tariffsList = _tariffs.Tariffs.ToList();
+
+                // Добавляем пустой тариф для возможности выбора "Без тарифа"
+                tariffsList.Insert(0, new Tariff
+                {
+                    Id = 0,
+                    Name = "Без тарифа",
+                    BaseCost = 0,
+                    Category = ""
+                });
+
+                TariffComboBox.ItemsSource = tariffsList;
+                TariffComboBox.DisplayMemberPath = "DisplayText";
+                TariffComboBox.SelectedValuePath = "Id";
+
+                if (StudentData.TariffId > 0)
+                {
+                    // Ищем тариф с таким ID
+                    var selectedTariff = tariffsList.FirstOrDefault(t => t.Id == StudentData.TariffId);
+                    if (selectedTariff != null)
+                    {
+                        TariffComboBox.SelectedValue = StudentData.TariffId;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки тарифов: {ex.Message}");
+                TariffComboBox.ItemsSource = new[] { new { Id = 0, DisplayText = "Ошибка загрузки" } };
+            }
+        }
+
+        private void CategoryComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CategoryComboBox.SelectedItem is VehicleCategory selectedCategory && _tariffs != null)
+            {
+                // Фильтруем тарифы по выбранной категории
+                var filteredTariffs = _tariffs.Tariffs
+                    .Where(t => t.Category == selectedCategory.Code || string.IsNullOrEmpty(t.Category))
+                    .ToList();
+
+                // Добавляем "Без тарифа" в начало
+                filteredTariffs.Insert(0, new Tariff
+                {
+                    Id = 0,
+                    Name = "Без тарифа",
+                    BaseCost = 0,
+                    Category = ""
+                });
+
+                // Сохраняем текущее выделение
+                var currentTariffId = StudentData.TariffId;
+
+                TariffComboBox.ItemsSource = filteredTariffs;
+
+                // Пытаемся восстановить выделение, если подходит
+                if (currentTariffId > 0)
+                {
+                    var exists = filteredTariffs.Any(t => t.Id == currentTariffId);
+                    if (exists)
+                    {
+                        TariffComboBox.SelectedValue = currentTariffId;
+                    }
+                    else
+                    {
+                        // Если текущий тариф не подходит под категорию, сбрасываем
+                        StudentData.TariffId = null;
+                        TariffComboBox.SelectedIndex = 0;
+                    }
+                }
+                else
+                {
+                    TariffComboBox.SelectedIndex = 0;
+                }
+            }
+        }
+
+        private void TariffComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (TariffComboBox.SelectedItem is Tariff selectedTariff)
+            {
+                if (selectedTariff.Id > 0)
+                {
+                    // Автоматически подставляем стоимость из тарифа
+                    StudentData.TuitionAmount = selectedTariff.BaseCost;
+                    StudentData.TariffId = selectedTariff.Id;
+
+                    // Обновляем отображение
+                    TuitionTextBox.Text = selectedTariff.BaseCost.ToString("F2");
+                }
+                else
+                {
+                    // Если выбран "Без тарифа"
+                    StudentData.TariffId = null;
+                    // Не сбрасываем стоимость, чтобы можно было ввести вручную
+                }
+
+                UpdateFinalAmount();
+            }
+        }
+
+        private void DiscountTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            UpdateFinalAmount();
+        }
+
+        private void TuitionTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            UpdateFinalAmount();
+        }
+
+        private void UpdateFinalAmount()
+        {
+            try
+            {
+                decimal tuition = 0;
+                decimal discount = 0;
+
+                decimal.TryParse(TuitionTextBox?.Text, out tuition);
+                decimal.TryParse(DiscountTextBox?.Text, out discount);
+
+                StudentData.TuitionAmount = tuition;
+                StudentData.DiscountAmount = discount;
+
+                var finalAmount = tuition - discount;
+                FinalAmountTextBlock.Text = $"Итого: {finalAmount:N2} руб.";
+
+                if (discount > tuition)
+                {
+                    FinalAmountTextBlock.Foreground = System.Windows.Media.Brushes.Red;
+                    WarningTextBlock.Text = "Внимание: Скидка больше стоимости!";
+                    WarningTextBlock.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    FinalAmountTextBlock.Foreground = System.Windows.Media.Brushes.Green;
+                    WarningTextBlock.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch
+            {
+                FinalAmountTextBlock.Text = "Итого: 0 руб.";
             }
         }
 
@@ -214,6 +379,13 @@ namespace DrivingSchool.Views
                 CategoryComboBox.Focus();
                 return;
             }
+
+            // Обновляем значения из текстовых полей
+            if (decimal.TryParse(TuitionTextBox?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal tuition))
+                StudentData.TuitionAmount = tuition;
+
+            if (decimal.TryParse(DiscountTextBox?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal discount))
+                StudentData.DiscountAmount = discount;
 
             try
             {
