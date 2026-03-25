@@ -79,28 +79,30 @@ namespace DrivingSchool.Views
 
         private void UpdateButtonsAvailability()
         {
-            var isSelected = GroupsGrid.SelectedItem != null;
+            var selectedGroups = GroupsGrid.SelectedItems.Cast<StudyGroup>().ToList();
+            var hasSelection = selectedGroups.Any();
+            var singleSelected = selectedGroups.Count == 1;
+            var multipleSelected = selectedGroups.Count >= 2;
 
-            if (isSelected)
+            EditGroupButton.IsEnabled = singleSelected;
+            DeleteGroupButton.IsEnabled = singleSelected && (selectedGroups[0]?.StudentCount == 0);
+            ViewStudentsButton.IsEnabled = singleSelected;
+            AddStudentButton.IsEnabled = singleSelected;
+            RemoveStudentButton.IsEnabled = singleSelected;
+            MoveStudentButton.IsEnabled = singleSelected;
+            MergeGroupsButton.IsEnabled = multipleSelected; // Активируем при выборе 2+ групп
+
+            if (singleSelected)
             {
-                _selectedGroup = GroupsGrid.SelectedItem as StudyGroup;
+                var group = selectedGroups[0];
+                InfoTextBlock.Text = $"Группа: {group.Name} | Студентов: {group.StudentCount} | " +
+                                    $"Период: {group.StartDate:dd.MM.yyyy} - {group.EndDate:dd.MM.yyyy}";
             }
-            else
+            else if (multipleSelected)
             {
-                _selectedGroup = null;
-            }
-
-            EditGroupButton.IsEnabled = isSelected;
-            DeleteGroupButton.IsEnabled = isSelected && (_selectedGroup?.StudentCount == 0);
-            ViewStudentsButton.IsEnabled = isSelected;
-            AddStudentButton.IsEnabled = isSelected;
-            RemoveStudentButton.IsEnabled = isSelected;
-            MoveStudentButton.IsEnabled = isSelected;
-
-            if (isSelected && _selectedGroup != null)
-            {
-                InfoTextBlock.Text = $"Группа: {_selectedGroup.Name} | Студентов: {_selectedGroup.StudentCount} | " +
-                                    $"Период: {_selectedGroup.StartDate:dd.MM.yyyy} - {_selectedGroup.EndDate:dd.MM.yyyy}";
+                var totalStudents = selectedGroups.Sum(g => g.StudentCount);
+                InfoTextBlock.Text = $"Выбрано групп: {selectedGroups.Count} | Всего студентов: {totalStudents} | " +
+                                    $"Категории: {string.Join(", ", selectedGroups.Select(g => g.Category).Distinct())}";
             }
             else
             {
@@ -717,6 +719,100 @@ namespace DrivingSchool.Views
             cancelButton.Click += (s, args) => dialog.Close();
 
             dialog.ShowDialog();
+        }
+
+        private void MergeGroups_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var selectedGroups = GroupsGrid.SelectedItems.Cast<StudyGroup>().ToList();
+
+                if (selectedGroups.Count < 2)
+                {
+                    MessageBox.Show("Выберите минимум 2 группы для объединения (используйте Ctrl)",
+                        "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Создаем новую группу через существующее окно редактирования
+                var dialog = new GroupEditDialog(_dataService);
+                dialog.Title = "Создание группы для объединения";
+                dialog.Owner = Window.GetWindow(this);
+
+                // Подсказываем название на основе выбранных групп
+                var names = selectedGroups.Select(g => g.Name).ToList();
+                dialog.GroupData.Name = $"Объединение: {string.Join(" + ", names)}";
+
+                // Подсказываем даты (самую раннюю и самую позднюю)
+                dialog.GroupData.StartDate = selectedGroups.Min(g => g.StartDate);
+                dialog.GroupData.EndDate = selectedGroups.Max(g => g.EndDate);
+
+                if (dialog.ShowDialog() == true)
+                {
+                    // НЕ вызываем SaveStudyGroup повторно!
+                    // Группа уже сохранена в диалоге, и у GroupData уже есть ID
+                    var newGroup = dialog.GroupData;
+
+                    // Проверяем, что группа действительно сохранена и имеет ID
+                    if (newGroup.Id == 0)
+                    {
+                        MessageBox.Show("Ошибка: группа не была сохранена в базе данных", "Ошибка",
+                            MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+
+                    // Подтверждение
+                    var totalStudents = selectedGroups.Sum(g => g.StudentCount);
+                    var message = $"Будут объединены группы:\n";
+                    foreach (var g in selectedGroups)
+                    {
+                        message += $"• {g.Name} ({g.StudentCount} студентов)\n";
+                    }
+                    message += $"\nБудет создана новая группа: {newGroup.Name} (ID: {newGroup.Id})";
+                    message += $"\nВсего студентов будет перемещено: {totalStudents}";
+                    message += $"\n\nИсходные группы будут УДАЛЕНЫ. Продолжить?";
+
+                    if (MessageBox.Show(message, "Подтверждение объединения",
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                    {
+                        // Выполняем объединение
+                        bool result = _dataService.MergeGroups(
+                            newGroup.Id,  // Используем ID из диалога
+                            selectedGroups.Select(g => g.Id).ToList()
+                        );
+
+                        if (result)
+                        {
+                            LoadData();
+                            MessageBox.Show($"Группы успешно объединены!\n\n" +
+                                           $"Создана группа: {newGroup.Name}\n" +
+                                           $"Объединено групп: {selectedGroups.Count}\n" +
+                                           $"Перемещено студентов: {totalStudents}",
+                                "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show("Не удалось объединить группы", "Ошибка",
+                                MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                    else
+                    {
+                        // Если пользователь передумал объединять, нужно удалить созданную группу?
+                        // Можно спросить:
+                        if (MessageBox.Show("Удалить только что созданную группу?", "Вопрос",
+                            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                        {
+                            _dataService.DeleteStudyGroup(newGroup.Id);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при объединении групп: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)

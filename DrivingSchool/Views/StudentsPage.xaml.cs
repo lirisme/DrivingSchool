@@ -224,16 +224,22 @@ namespace DrivingSchool.Views
                 var dialog = new StudentEditDialog(_dataService);
                 dialog.Owner = Window.GetWindow(this);
 
+                // ДОБАВЬТЕ ЭТУ СТРОКУ - подписка на событие
+                dialog.StudentSaved += Dialog_StudentSaved;
+
                 if (dialog.ShowDialog() == true)
                 {
                     LoadStudents();
-                    MessageBox.Show("Учащийся успешно добавлен!", "Успех",
+                    MessageBox.Show("Студент успешно добавлен!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
+
+                // ДОБАВЬТЕ ЭТУ СТРОКУ - отписка
+                dialog.StudentSaved -= Dialog_StudentSaved;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -583,6 +589,28 @@ namespace DrivingSchool.Views
             if (StudentsGrid.SelectedItem != null)
             {
                 EditStudent_Click(sender, e);
+            }
+        }
+
+        private void Dialog_StudentSaved(object sender, StudentSavedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                $"Студент {e.StudentName} успешно добавлен!\n\n" +
+                $"Для начала обучения необходимо внести первый платеж.\n\n" +
+                $"Перейти к оплате?",
+                "Первый платеж",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                var paymentsPage = new PaymentsPage(_dataService);
+                paymentsPage.SelectStudent(e.StudentId);
+                var mainWindow = Application.Current.MainWindow as MainWindow;
+                if (mainWindow != null && mainWindow.MainFrame != null)
+                {
+                    mainWindow.MainFrame.Navigate(paymentsPage);
+                }
             }
         }
     }

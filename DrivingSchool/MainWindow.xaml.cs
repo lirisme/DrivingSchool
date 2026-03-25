@@ -1,8 +1,9 @@
-﻿using System;
-using System.Windows;
-using System.Windows.Threading;
-using DrivingSchool.Services;
+﻿using DrivingSchool.Services;
 using DrivingSchool.Views;
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace DrivingSchool
 {
@@ -387,6 +388,33 @@ namespace DrivingSchool
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка загрузки страницы тарифов: {ex.Message}", "Ошибка");
+            }
+        }
+
+        private void DrivingLessons_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var page = new DrivingLessonsPage(_dataService);
+                MainFrame.Navigate(page);
+                StatusText.Text = "Бронирование уроков вождения";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки страницы: {ex.Message}", "Ошибка");
+            }
+        }
+
+        private void OpenExamManagement_Click(object sender, RoutedEventArgs e)
+        {
+            try {
+            var page = new ExamManagementPage(_dataService);
+            MainFrame.Navigate(page);
+            StatusText.Text = "Экзамены";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки страницы: {ex.Message}", "Ошибка");
             }
         }
     }

@@ -98,6 +98,15 @@ namespace DrivingSchool.Views
             }
         }
 
+        public void SetPaymentData(decimal amount, string paymentType)
+        {
+            if (amount > 0)
+            {
+                AmountTextBox.Text = amount.ToString("F2");
+            }
+            PaymentTypeComboBox.Text = paymentType;
+        }
+
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
             DialogResult = false;

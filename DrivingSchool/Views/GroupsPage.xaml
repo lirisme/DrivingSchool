@@ -89,6 +89,15 @@
                     Margin="0,0,10,0" IsEnabled="False"
                     ToolTip="Удалить студента из группы"/>
 
+            <Button x:Name="MergeGroupsButton" 
+                    Content="🔄 Объединить группы" 
+                    Click="MergeGroups_Click"
+                    Width="150" Height="35" 
+                    Background="#9C27B0" Foreground="White"
+                    Margin="0,0,10,0"
+                    IsEnabled="False"
+                    
+        ToolTip="Объединить несколько групп в одну (выберите 2+ группы через Ctrl)"/>
             <Button x:Name="MoveStudentButton" 
                     Content="🔄 Переместить" 
                     Click="MoveStudentToGroup_Click"
@@ -100,13 +109,13 @@
 
         <!-- Таблица с группами -->
         <DataGrid x:Name="GroupsGrid" 
-                  Grid.Row="3"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  SelectionMode="Single"
-                  SelectionChanged="GroupsGrid_SelectionChanged"
-                  MouseDoubleClick="GroupsGrid_MouseDoubleClick"
-                  Margin="0,0,0,10">
+              Grid.Row="3"
+              AutoGenerateColumns="False"
+              IsReadOnly="True"
+              SelectionMode="Extended"
+              SelectionChanged="GroupsGrid_SelectionChanged"
+              MouseDoubleClick="GroupsGrid_MouseDoubleClick"
+              Margin="0,0,0,10">
 
             <DataGrid.Columns>
                 <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>

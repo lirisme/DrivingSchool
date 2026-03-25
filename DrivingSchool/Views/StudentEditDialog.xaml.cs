@@ -15,6 +15,9 @@ namespace DrivingSchool.Views
         private TariffCollection _tariffs;
         public Student StudentData { get; private set; }
 
+        // Добавьте это событие
+        public event EventHandler<StudentSavedEventArgs> StudentSaved;
+
         public StudentEditDialog(SqlDataService dataService, Student studentData = null)
         {
             InitializeComponent();
@@ -203,8 +206,8 @@ namespace DrivingSchool.Views
                     StudentData.TuitionAmount = selectedTariff.BaseCost;
                     StudentData.TariffId = selectedTariff.Id;
 
-                    // Обновляем отображение
-                    TuitionTextBox.Text = selectedTariff.BaseCost.ToString("F2");
+                    // Используем инвариантную культуру для форматирования
+                    TuitionTextBox.Text = selectedTariff.BaseCost.ToString("F2", CultureInfo.InvariantCulture);
                 }
                 else
                 {
@@ -234,8 +237,12 @@ namespace DrivingSchool.Views
                 decimal tuition = 0;
                 decimal discount = 0;
 
-                decimal.TryParse(TuitionTextBox?.Text, out tuition);
-                decimal.TryParse(DiscountTextBox?.Text, out discount);
+                // Явно указываем культуру для парсинга
+                if (!string.IsNullOrEmpty(TuitionTextBox?.Text))
+                    decimal.TryParse(TuitionTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out tuition);
+
+                if (!string.IsNullOrEmpty(DiscountTextBox?.Text))
+                    decimal.TryParse(DiscountTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out discount);
 
                 StudentData.TuitionAmount = tuition;
                 StudentData.DiscountAmount = discount;
@@ -380,16 +387,60 @@ namespace DrivingSchool.Views
                 return;
             }
 
-            // Обновляем значения из текстовых полей
-            if (decimal.TryParse(TuitionTextBox?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal tuition))
-                StudentData.TuitionAmount = tuition;
+            // Обновляем значения из текстовых полей с использованием инвариантной культуры
+            if (!string.IsNullOrEmpty(TuitionTextBox?.Text))
+            {
+                if (decimal.TryParse(TuitionTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal tuition))
+                {
+                    StudentData.TuitionAmount = tuition;
+                }
+                else
+                {
+                    MessageBox.Show("Некорректный формат суммы обучения", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    TuitionTextBox.Focus();
+                    return;
+                }
+            }
 
-            if (decimal.TryParse(DiscountTextBox?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal discount))
-                StudentData.DiscountAmount = discount;
+            if (!string.IsNullOrEmpty(DiscountTextBox?.Text))
+            {
+                if (decimal.TryParse(DiscountTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal discount))
+                {
+                    StudentData.DiscountAmount = discount;
+                }
+                else
+                {
+                    MessageBox.Show("Некорректный формат суммы скидки", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    DiscountTextBox.Focus();
+                    return;
+                }
+            }
+
+            // Проверка, что скидка не превышает стоимость
+            if (StudentData.DiscountAmount > StudentData.TuitionAmount)
+            {
+                var result = MessageBox.Show("Скидка превышает стоимость обучения. Продолжить сохранение?",
+                    "Предупреждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (result == MessageBoxResult.No)
+                {
+                    DiscountTextBox.Focus();
+                    return;
+                }
+            }
 
             try
             {
-                _dataService.SaveStudent(StudentData);
+                int savedId = _dataService.SaveStudent(StudentData);
+
+                // Вызываем событие после сохранения
+                StudentSaved?.Invoke(this, new StudentSavedEventArgs
+                {
+                    StudentId = savedId,
+                    StudentName = StudentData.FullName
+                });
+
                 DialogResult = true;
                 Close();
             }
@@ -405,5 +456,11 @@ namespace DrivingSchool.Views
             DialogResult = false;
             Close();
         }
+    }
+    // Класс для аргументов события
+    public class StudentSavedEventArgs : EventArgs
+    {
+        public int StudentId { get; set; }
+        public string StudentName { get; set; }
     }
 }

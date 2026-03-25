@@ -17,6 +17,11 @@ namespace DrivingSchool.Models
         public DateTime CreatedDate { get; set; }
         public DateTime? ModifiedDate { get; set; }
 
+        // Добавьте эти свойства
+        public int CarId { get; set; }  // ID машины инструктора
+        public string Name => $"{LastName} {FirstName}";  // Имя для отображения
+        public string DisplayName => $"{LastName} {FirstName} - {Position}";  // Отображаемое имя
+
         // Вычисляемое полное имя
         public string FullName
         {

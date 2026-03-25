@@ -128,6 +128,10 @@ namespace DrivingSchool.Models
                 return total == 6 ? "Green" : total >= 4 ? "Orange" : "Red";
             }
         }
+
+        // ========== ДОБАВЛЕНО ТОЛЬКО ЭТО ==========
+        public int? CompletedLessons { get; set; }
+        // =========================================
     }
 
     public class StudentCollection

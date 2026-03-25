@@ -42,6 +42,14 @@
                 <MenuItem Header="Финансовые отчеты" Click="FinancialReports_Click"/>
             </MenuItem>
 
+            <MenuItem Header="Вождение">
+                <MenuItem Header="Бронирование уроков" Click="DrivingLessons_Click"/>
+            </MenuItem>
+
+            <MenuItem Header="Экзамены">
+                <MenuItem Header="Проведение экзаменов" Click="OpenExamManagement_Click"/>
+            </MenuItem>
+
             <MenuItem Header="Отчеты">
                 <MenuItem Header="Отчеты по учащимся" Click="StudentReports_Click"/>
             </MenuItem>

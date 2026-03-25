@@ -90,7 +90,15 @@ namespace DrivingSchool.Views
 
             try
             {
-                _dataService.SaveStudyGroup(GroupData);
+                // Важно! Сохраняем и получаем ID
+                int newId = _dataService.SaveStudyGroup(GroupData);
+
+                // Если это новая группа (Id был 0), то присваиваем полученный ID
+                if (GroupData.Id == 0)
+                {
+                    GroupData.Id = newId;
+                }
+
                 DialogResult = true;
                 Close();
             }

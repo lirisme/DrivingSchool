@@ -63,6 +63,7 @@ namespace DrivingSchool.Services
                        e.LastName + ' ' + e.FirstName as InstructorName,
                        c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
                        t.Name as TariffName,
+                       ISNULL(s.CompletedLessons, 0) as CompletedLessons,  -- ДОБАВЬТЕ ЭТУ СТРОКУ
                        ISNULL((
                            SELECT SUM(Amount) 
                            FROM Payments p 
@@ -111,6 +112,7 @@ namespace DrivingSchool.Services
                        e.LastName + ' ' + e.FirstName as InstructorName,
                        c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
                        t.Name as TariffName,
+                       ISNULL(s.CompletedLessons, 0) as CompletedLessons,  -- ДОБАВЬТЕ ЭТУ СТРОКУ
                        ISNULL((
                            SELECT SUM(Amount) 
                            FROM Payments p 
@@ -361,18 +363,20 @@ namespace DrivingSchool.Services
                     GroupName = reader["GroupName"]?.ToString() ?? "",
                     InstructorName = reader["InstructorName"]?.ToString() ?? "",
                     CarInfo = reader["CarInfo"]?.ToString() ?? "",
-                    // Добавьте в метод MapStudent после существующих полей:
                     TuitionAmount = reader["TuitionAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TuitionAmount"]) : 0,
                     DiscountAmount = reader["DiscountAmount"] != DBNull.Value ? Convert.ToDecimal(reader["DiscountAmount"]) : 0,
                     TariffId = reader["TariffId"] as int?,
                     TariffName = reader["TariffName"]?.ToString() ?? "",
                     PaidAmount = reader["PaidAmount"] != DBNull.Value ? Convert.ToDecimal(reader["PaidAmount"]) : 0,
+
+                    // ДОБАВЬТЕ ЭТУ СТРОКУ:
+                    CompletedLessons = reader["CompletedLessons"] != DBNull.Value ? Convert.ToInt32(reader["CompletedLessons"]) : 0
                 };
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Ошибка маппинга студента: {ex.Message}");
-                return new Student(); // Возвращаем пустого студента в случае ошибки
+                return new Student();
             }
         }
 
@@ -2791,6 +2795,1652 @@ namespace DrivingSchool.Services
                 System.Diagnostics.Debug.WriteLine($"Ошибка обновления стоимости обучения: {ex.Message}");
                 throw new Exception($"Ошибка обновления стоимости обучения: {ex.Message}");
             }
+        }
+
+        public bool MergeGroups(int newGroupId, List<int> sourceGroupIds)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        // 1. ПРОВЕРЯЕМ, ЧТО НОВАЯ ГРУППА СУЩЕСТВУЕТ
+                        string checkGroupSql = "SELECT COUNT(*) FROM StudyGroups WHERE Id = @NewGroupId";
+                        using (var checkCmd = new SqlCommand(checkGroupSql, connection, transaction))
+                        {
+                            checkCmd.Parameters.AddWithValue("@NewGroupId", newGroupId);
+                            int groupExists = (int)checkCmd.ExecuteScalar();
+
+                            if (groupExists == 0)
+                            {
+                                throw new Exception($"Группа с ID {newGroupId} не найдена в базе данных");
+                            }
+                        }
+
+                        // 2. Переносим студентов в новую группу
+                        string updateStudentsSql = @"
+                    UPDATE Students 
+                    SET GroupId = @NewGroupId, ModifiedDate = GETDATE()
+                    WHERE GroupId = @OldGroupId";
+
+                        foreach (var groupId in sourceGroupIds)
+                        {
+                            using (var cmd = new SqlCommand(updateStudentsSql, connection, transaction))
+                            {
+                                cmd.Parameters.AddWithValue("@NewGroupId", newGroupId);
+                                cmd.Parameters.AddWithValue("@OldGroupId", groupId);
+
+                                int updated = cmd.ExecuteNonQuery();
+                                System.Diagnostics.Debug.WriteLine($"Перенесено студентов из группы {groupId}: {updated}");
+                            }
+                        }
+
+                        // 3. Проверяем, что студентов больше нет в исходных группах
+                        foreach (var groupId in sourceGroupIds)
+                        {
+                            string checkStudentsSql = "SELECT COUNT(*) FROM Students WHERE GroupId = @GroupId";
+                            using (var checkCmd = new SqlCommand(checkStudentsSql, connection, transaction))
+                            {
+                                checkCmd.Parameters.AddWithValue("@GroupId", groupId);
+                                int remainingStudents = (int)checkCmd.ExecuteScalar();
+
+                                if (remainingStudents > 0)
+                                {
+                                    throw new Exception($"В группе {groupId} осталось {remainingStudents} студентов после переноса!");
+                                }
+                            }
+                        }
+
+                        // 4. Удаляем исходные группы
+                        string deleteGroupsSql = "DELETE FROM StudyGroups WHERE Id = @GroupId";
+
+                        foreach (var groupId in sourceGroupIds)
+                        {
+                            using (var cmd = new SqlCommand(deleteGroupsSql, connection, transaction))
+                            {
+                                cmd.Parameters.AddWithValue("@GroupId", groupId);
+                                int deleted = cmd.ExecuteNonQuery();
+                                System.Diagnostics.Debug.WriteLine($"Удалена группа {groupId}");
+                            }
+                        }
+
+                        transaction.Commit();
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback();
+                        System.Diagnostics.Debug.WriteLine($"Ошибка в транзакции: {ex.Message}");
+                        throw;
+                    }
+                }
+            }
+        }
+
+        // =====================================================
+        // Методы для бронирования уроков вождения
+        // =====================================================
+
+        /// <summary>
+        /// Загрузка доступных слотов для инструктора и автомобиля
+        /// </summary>
+        public LessonSlotCollection LoadAvailableSlots(int instructorId, int carId, DateTime startDate, DateTime endDate)
+        {
+            var collection = new LessonSlotCollection { Slots = new List<LessonSlot>() };
+
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+            SELECT ls.*, 
+                   e.LastName + ' ' + e.FirstName as InstructorName,
+                   c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo
+            FROM LessonSlots ls
+            LEFT JOIN Employees e ON ls.InstructorId = e.Id
+            LEFT JOIN Cars c ON ls.CarId = c.Id
+            WHERE ls.InstructorId = @InstructorId 
+              AND ls.CarId = @CarId
+              AND ls.LessonDate BETWEEN @StartDate AND @EndDate
+              AND ls.IsAvailable = 1
+            ORDER BY ls.LessonDate, ls.StartTime", conn);
+
+                cmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                cmd.Parameters.AddWithValue("@CarId", carId);
+                cmd.Parameters.AddWithValue("@StartDate", startDate);
+                cmd.Parameters.AddWithValue("@EndDate", endDate);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        collection.Slots.Add(new LessonSlot
+                        {
+                            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                            InstructorId = reader.GetInt32(reader.GetOrdinal("InstructorId")),
+                            CarId = reader.GetInt32(reader.GetOrdinal("CarId")),
+                            LessonDate = reader.GetDateTime(reader.GetOrdinal("LessonDate")),
+                            StartTime = TimeSpan.Parse(reader["StartTime"].ToString()),
+                            EndTime = TimeSpan.Parse(reader["EndTime"].ToString()),
+                            IsAvailable = reader.GetBoolean(reader.GetOrdinal("IsAvailable")),
+                            CreatedDate = reader.GetDateTime(reader.GetOrdinal("CreatedDate")),
+                            InstructorName = reader["InstructorName"]?.ToString() ?? "",
+                            CarInfo = reader["CarInfo"]?.ToString() ?? ""
+                        });
+                    }
+                }
+            }
+
+            return collection;
+        }
+
+        /// <summary>
+        /// Бронирование урока
+        /// </summary>
+        public int BookLesson(int studentId, int slotId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        // Получаем информацию о слоте
+                        var slotCmd = new SqlCommand(@"
+                    SELECT InstructorId, CarId, LessonDate, StartTime, EndTime 
+                    FROM LessonSlots 
+                    WHERE Id = @SlotId AND IsAvailable = 1", conn, transaction);
+                        slotCmd.Parameters.AddWithValue("@SlotId", slotId);
+
+                        int instructorId = 0, carId = 0;
+                        DateTime lessonDate = DateTime.Today;
+                        TimeSpan startTime = TimeSpan.Zero, endTime = TimeSpan.Zero;
+
+                        using (var reader = slotCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                instructorId = reader.GetInt32(0);
+                                carId = reader.GetInt32(1);
+                                lessonDate = reader.GetDateTime(2);
+                                startTime = TimeSpan.Parse(reader[3].ToString());
+                                endTime = TimeSpan.Parse(reader[4].ToString());
+                            }
+                            else
+                            {
+                                throw new Exception("Слот не найден или уже занят");
+                            }
+                        }
+
+                        // Создаем бронирование
+                        var insertCmd = new SqlCommand(@"
+                    INSERT INTO DrivingLessons (StudentId, InstructorId, CarId, SlotId, LessonDate, StartTime, EndTime, Status, CreatedAt)
+                    OUTPUT INSERTED.Id
+                    VALUES (@StudentId, @InstructorId, @CarId, @SlotId, @LessonDate, @StartTime, @EndTime, 'Booked', GETDATE())", conn, transaction);
+
+                        insertCmd.Parameters.AddWithValue("@StudentId", studentId);
+                        insertCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        insertCmd.Parameters.AddWithValue("@CarId", carId);
+                        insertCmd.Parameters.AddWithValue("@SlotId", slotId);
+                        insertCmd.Parameters.AddWithValue("@LessonDate", lessonDate);
+                        insertCmd.Parameters.AddWithValue("@StartTime", startTime);
+                        insertCmd.Parameters.AddWithValue("@EndTime", endTime);
+
+                        int lessonId = (int)insertCmd.ExecuteScalar();
+
+                        // Закрываем слот
+                        var updateSlotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 0 WHERE Id = @SlotId", conn, transaction);
+                        updateSlotCmd.Parameters.AddWithValue("@SlotId", slotId);
+                        updateSlotCmd.ExecuteNonQuery();
+
+                        transaction.Commit();
+                        return lessonId;
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Загрузка уроков студента
+        /// </summary>
+        public List<DrivingLesson> LoadStudentLessons(int studentId)
+        {
+            var lessons = new List<DrivingLesson>();
+
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+    SELECT dl.*, 
+           s.LastName + ' ' + s.FirstName as StudentName,
+           e.LastName + ' ' + e.FirstName as InstructorName,
+           c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo
+    FROM DrivingLessons dl
+    JOIN Students s ON dl.StudentId = s.Id
+    JOIN Employees e ON dl.InstructorId = e.Id
+    JOIN Cars c ON dl.CarId = c.Id
+    WHERE dl.StudentId = @StudentId
+    ORDER BY dl.LessonDate DESC, dl.StartTime DESC", conn);
+
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        lessons.Add(new DrivingLesson
+                        {
+                            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                            StudentId = reader.GetInt32(reader.GetOrdinal("StudentId")),
+                            InstructorId = reader.GetInt32(reader.GetOrdinal("InstructorId")),
+                            CarId = reader.GetInt32(reader.GetOrdinal("CarId")),
+                            SlotId = reader["SlotId"] as int?,
+                            LessonDate = reader.GetDateTime(reader.GetOrdinal("LessonDate")),
+                            StartTime = TimeSpan.Parse(reader["StartTime"].ToString()),
+                            EndTime = TimeSpan.Parse(reader["EndTime"].ToString()),
+                            Status = reader["Status"]?.ToString() ?? "Booked",
+                            CanceledAt = reader["CanceledAt"] as DateTime?,
+                            IsCancelledByStudent = reader["IsCancelledByStudent"] as bool? ?? false,
+                            CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt")),
+                            IsExtra = reader["IsExtra"] != DBNull.Value && Convert.ToBoolean(reader["IsExtra"]), // ДОБАВЬТЕ ЭТУ СТРОКУ
+                            StudentName = reader["StudentName"]?.ToString() ?? "",
+                            InstructorName = reader["InstructorName"]?.ToString() ?? "",
+                            CarInfo = reader["CarInfo"]?.ToString() ?? ""
+                        });
+                    }
+                }
+            }
+
+            return lessons;
+        }
+
+        /// <summary>
+        /// Отмена урока
+        /// </summary>
+        public string CancelLesson(int lessonId, DateTime cancelTime)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                // Получаем информацию об уроке
+                var cmd = new SqlCommand(@"
+            SELECT LessonDate, StartTime, StudentId, InstructorId, CarId, SlotId
+            FROM DrivingLessons WHERE Id = @LessonId", conn);
+                cmd.Parameters.AddWithValue("@LessonId", lessonId);
+
+                DateTime lessonDate;
+                TimeSpan startTime;
+                int instructorId, carId;
+                int? slotId;  // ✅ ИСПРАВЛЕНО: nullable int объявлен отдельно
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    if (!reader.Read()) return "Урок не найден";
+                    lessonDate = reader.GetDateTime(0);
+                    startTime = TimeSpan.Parse(reader[1].ToString());
+                    instructorId = reader.GetInt32(2);
+                    carId = reader.GetInt32(3);
+                    slotId = reader.IsDBNull(4) ? null : (int?)reader.GetInt32(4);
+                }
+
+                // Проверяем, можно ли отменить без штрафа (за 24 часа)
+                var lessonDateTime = lessonDate + startTime;
+                var hoursBefore = (lessonDateTime - cancelTime).TotalHours;
+
+                bool isWithin24Hours = hoursBefore <= 24;
+
+                if (isWithin24Hours)
+                {
+                    // Отмена за 24 часа - без штрафа
+                    var updateCmd = new SqlCommand(@"
+                UPDATE DrivingLessons 
+                SET Status = 'Cancelled', CanceledAt = @CancelTime, IsCancelledByStudent = 1
+                WHERE Id = @LessonId", conn);
+                    updateCmd.Parameters.AddWithValue("@LessonId", lessonId);
+                    updateCmd.Parameters.AddWithValue("@CancelTime", cancelTime);
+                    updateCmd.ExecuteNonQuery();
+
+                    // Возвращаем слот в доступные
+                    if (slotId.HasValue)
+                    {
+                        var slotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 1 WHERE Id = @SlotId", conn);
+                        slotCmd.Parameters.AddWithValue("@SlotId", slotId.Value);
+                        slotCmd.ExecuteNonQuery();
+                    }
+
+                    return "Урок отменен без штрафа";
+                }
+                else
+                {
+                    // Отмена менее чем за 24 часа - урок считается пропущенным
+                    var updateCmd = new SqlCommand(@"
+                UPDATE DrivingLessons 
+                SET Status = 'NoShow', CanceledAt = @CancelTime, IsCancelledByStudent = 1
+                WHERE Id = @LessonId", conn);
+                    updateCmd.Parameters.AddWithValue("@LessonId", lessonId);
+                    updateCmd.Parameters.AddWithValue("@CancelTime", cancelTime);
+                    updateCmd.ExecuteNonQuery();
+
+                    // Обновляем счетчик пропусков у студента
+                    var studentCmd = new SqlCommand(@"
+                UPDATE Students 
+                SET MissedLessons = ISNULL(MissedLessons, 0) + 1
+                WHERE Id = @StudentId", conn);
+                    studentCmd.Parameters.AddWithValue("@StudentId", instructorId);  // ✅ ИСПРАВЛЕНО: используем instructorId из reader
+                    studentCmd.ExecuteNonQuery();
+
+                    return "Урок засчитан как пропущенный (отмена менее чем за 24 часа)";
+                }
+            }
+        }
+
+        private DrivingLesson MapDrivingLesson(SqlDataReader reader)
+        {
+            return new DrivingLesson
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                StudentId = reader.GetInt32(reader.GetOrdinal("StudentId")),
+                InstructorId = reader.GetInt32(reader.GetOrdinal("InstructorId")),
+                CarId = reader.GetInt32(reader.GetOrdinal("CarId")),
+                SlotId = reader["SlotId"] as int?,
+                LessonDate = reader.GetDateTime(reader.GetOrdinal("LessonDate")),
+                StartTime = TimeSpan.Parse(reader["StartTime"].ToString()),
+                EndTime = TimeSpan.Parse(reader["EndTime"].ToString()),
+                Status = reader["Status"]?.ToString() ?? "Booked",
+                CanceledAt = reader["CanceledAt"] as DateTime?,
+                IsCancelledByStudent = reader["IsCancelledByStudent"] as bool? ?? false,
+                CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt")),
+                StudentName = reader["StudentName"]?.ToString() ?? "",
+                InstructorName = reader["InstructorName"]?.ToString() ?? "",
+                CarInfo = reader["CarInfo"]?.ToString() ?? ""
+            };
+        }
+
+        /// <summary>
+        /// Создание слотов на месяц для всех инструкторов
+        /// </summary>
+        public void GenerateSlotsForNextMonth()
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                // Получаем всех инструкторов и их машины
+                var instructors = new List<(int Id, int CarId)>();
+                var cmd = new SqlCommand(@"
+            SELECT e.Id, c.Id AS CarId 
+            FROM Employees e
+            INNER JOIN Cars c ON e.Id = c.InstructorId
+            WHERE e.Position LIKE '%инструктор%' AND c.IsActive = 1", conn);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        instructors.Add((reader.GetInt32(0), reader.GetInt32(1)));
+                    }
+                }
+
+                if (instructors.Count == 0) return;
+
+                // Определяем диапазон: начало следующего месяца
+                var today = DateTime.Today;
+                var startDate = new DateTime(today.Year, today.Month, 1).AddMonths(1);
+                var endDate = startDate.AddMonths(1).AddDays(-1);
+
+                // Временные слоты
+                var timeSlots = new[]
+                {
+                new TimeSpan(9, 0, 0), new TimeSpan(11, 0, 0),
+                new TimeSpan(11, 0, 0), new TimeSpan(13, 0, 0),
+                new TimeSpan(13, 0, 0), new TimeSpan(15, 0, 0),
+                new TimeSpan(15, 0, 0), new TimeSpan(17, 0, 0),
+                new TimeSpan(17, 0, 0), new TimeSpan(19, 0, 0)
+        };
+
+                foreach (var (instructorId, carId) in instructors)
+                {
+                    for (var date = startDate; date <= endDate; date = date.AddDays(1))
+                    {
+                        // Выходные пропускаем (воскресенье)
+                        if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+
+                        for (int i = 0; i < timeSlots.Length; i += 2)
+                        {
+                            // Проверяем, нет ли уже такого слота
+                            var checkCmd = new SqlCommand(@"
+                        SELECT COUNT(*) FROM LessonSlots 
+                        WHERE InstructorId = @InstructorId 
+                          AND CarId = @CarId 
+                          AND LessonDate = @LessonDate 
+                          AND StartTime = @StartTime", conn);
+                            checkCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                            checkCmd.Parameters.AddWithValue("@CarId", carId);
+                            checkCmd.Parameters.AddWithValue("@LessonDate", date);
+                            checkCmd.Parameters.AddWithValue("@StartTime", timeSlots[i]);
+
+                            if ((int)checkCmd.ExecuteScalar() == 0)
+                            {
+                                var insertCmd = new SqlCommand(@"
+                            INSERT INTO LessonSlots (InstructorId, CarId, LessonDate, StartTime, EndTime, IsAvailable)
+                            VALUES (@InstructorId, @CarId, @LessonDate, @StartTime, @EndTime, 1)", conn);
+                                insertCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                                insertCmd.Parameters.AddWithValue("@CarId", carId);
+                                insertCmd.Parameters.AddWithValue("@LessonDate", date);
+                                insertCmd.Parameters.AddWithValue("@StartTime", timeSlots[i]);
+                                insertCmd.Parameters.AddWithValue("@EndTime", timeSlots[i + 1]);
+                                insertCmd.ExecuteNonQuery();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Создает слоты на следующие 2 месяца для всех инструкторов
+        /// </summary>
+        public void CreateSlotsForAllInstructors()
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                // Получаем всех инструкторов и их машины
+                var cmd = new SqlCommand(@"
+            SELECT e.Id, c.Id 
+            FROM Employees e
+            INNER JOIN Cars c ON e.Id = c.InstructorId
+            WHERE c.IsActive = 1", conn);  // Убрал проверку на позицию
+
+                var instructors = new List<(int InstId, int CarId)>();
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        instructors.Add((reader.GetInt32(0), reader.GetInt32(1)));
+                    }
+                }
+
+                if (instructors.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("Нет инструкторов с привязанными машинами");
+                    return;
+                }
+
+                // НАЧИНАЕМ С ПЕРВОГО ДНЯ ТЕКУЩЕГО МЕСЯЦА
+                var today = DateTime.Today;
+                var startDate = new DateTime(today.Year, today.Month, 1);
+                var endDate = startDate.AddMonths(2).AddDays(-1);
+
+                var timeSlots = new[]
+                {
+            new TimeSpan(9, 0, 0), new TimeSpan(11, 0, 0),
+            new TimeSpan(11, 0, 0), new TimeSpan(13, 0, 0),
+            new TimeSpan(13, 0, 0), new TimeSpan(15, 0, 0),
+            new TimeSpan(15, 0, 0), new TimeSpan(17, 0, 0),
+            new TimeSpan(17, 0, 0), new TimeSpan(19, 0, 0)
+        };
+
+                int totalInserted = 0;
+
+                foreach (var (instId, carId) in instructors)
+                {
+                    for (var date = startDate; date <= endDate; date = date.AddDays(1))
+                    {
+                        if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+
+                        for (int i = 0; i < timeSlots.Length; i += 2)
+                        {
+                            // Проверяем, нет ли уже такого слота
+                            var checkCmd = new SqlCommand(@"
+                        SELECT COUNT(*) FROM LessonSlots 
+                        WHERE InstructorId = @InstId 
+                          AND CarId = @CarId 
+                          AND LessonDate = @Date 
+                          AND StartTime = @Start", conn);
+                            checkCmd.Parameters.AddWithValue("@InstId", instId);
+                            checkCmd.Parameters.AddWithValue("@CarId", carId);
+                            checkCmd.Parameters.AddWithValue("@Date", date);
+                            checkCmd.Parameters.AddWithValue("@Start", timeSlots[i]);
+
+                            if ((int)checkCmd.ExecuteScalar() == 0)
+                            {
+                                var insertCmd = new SqlCommand(@"
+                            INSERT INTO LessonSlots (InstructorId, CarId, LessonDate, StartTime, EndTime, IsAvailable, CreatedDate)
+                            VALUES (@InstId, @CarId, @Date, @Start, @End, 1, GETDATE())", conn);
+                                insertCmd.Parameters.AddWithValue("@InstId", instId);
+                                insertCmd.Parameters.AddWithValue("@CarId", carId);
+                                insertCmd.Parameters.AddWithValue("@Date", date);
+                                insertCmd.Parameters.AddWithValue("@Start", timeSlots[i]);
+                                insertCmd.Parameters.AddWithValue("@End", timeSlots[i + 1]);
+                                insertCmd.ExecuteNonQuery();
+                                totalInserted++;
+                            }
+                        }
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Создано слотов: {totalInserted}");
+            }
+        }
+
+        /// <summary>
+        /// Загрузка ВСЕХ слотов для инструктора и автомобиля (включая занятые)
+        /// </summary>
+        public LessonSlotCollection LoadAllSlots(int instructorId, int carId, DateTime startDate, DateTime endDate)
+        {
+            var collection = new LessonSlotCollection { Slots = new List<LessonSlot>() };
+
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+    SELECT ls.*, 
+           e.LastName + ' ' + e.FirstName as InstructorName,
+           c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo
+    FROM LessonSlots ls
+    LEFT JOIN Employees e ON ls.InstructorId = e.Id
+    LEFT JOIN Cars c ON ls.CarId = c.Id
+    WHERE ls.InstructorId = @InstructorId 
+      AND ls.CarId = @CarId
+      AND ls.LessonDate BETWEEN @StartDate AND @EndDate
+    ORDER BY ls.LessonDate, ls.StartTime", conn);
+
+                cmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                cmd.Parameters.AddWithValue("@CarId", carId);
+                cmd.Parameters.AddWithValue("@StartDate", startDate);
+                cmd.Parameters.AddWithValue("@EndDate", endDate);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        collection.Slots.Add(new LessonSlot
+                        {
+                            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                            InstructorId = reader.GetInt32(reader.GetOrdinal("InstructorId")),
+                            CarId = reader.GetInt32(reader.GetOrdinal("CarId")),
+                            LessonDate = reader.GetDateTime(reader.GetOrdinal("LessonDate")),
+                            StartTime = TimeSpan.Parse(reader["StartTime"].ToString()),
+                            EndTime = TimeSpan.Parse(reader["EndTime"].ToString()),
+                            IsAvailable = reader.GetBoolean(reader.GetOrdinal("IsAvailable")),
+                            CreatedDate = reader.GetDateTime(reader.GetOrdinal("CreatedDate")),
+                            InstructorName = reader["InstructorName"]?.ToString() ?? "",
+                            CarInfo = reader["CarInfo"]?.ToString() ?? ""
+                        });
+                    }
+                }
+            }
+
+            return collection;
+        }
+
+        public void EnsureSlotsExist(DateTime date, int instructorId, int carId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                // Получаем первый и последний день ВЫБРАННОГО месяца
+                var firstDay = new DateTime(date.Year, date.Month, 1);
+                var lastDay = firstDay.AddMonths(1).AddDays(-1);
+
+                // Добавляем также следующий месяц для непрерывности
+                var nextMonthFirstDay = firstDay.AddMonths(1);
+                var nextMonthLastDay = nextMonthFirstDay.AddMonths(1).AddDays(-1);
+
+                // Проверяем наличие слотов для КОНКРЕТНОГО инструктора и машины на текущий месяц
+                var checkCmd = new SqlCommand(@"
+SELECT COUNT(*) FROM LessonSlots 
+WHERE InstructorId = @InstructorId 
+  AND CarId = @CarId
+  AND LessonDate BETWEEN @StartDate AND @EndDate", conn);
+                checkCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                checkCmd.Parameters.AddWithValue("@CarId", carId);
+                checkCmd.Parameters.AddWithValue("@StartDate", firstDay);
+                checkCmd.Parameters.AddWithValue("@EndDate", lastDay);
+
+                int count = (int)checkCmd.ExecuteScalar();
+
+                // Если слотов нет для этого инструктора/машины - создаем
+                if (count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Нет слотов для инструктора {instructorId}, машины {carId} на {firstDay:MMMM yyyy}, создаю...");
+                    CreateSlotsForInstructorAndCar(instructorId, carId, firstDay, lastDay);
+                }
+
+                // Также проверяем и создаем слоты на следующий месяц для плавного перехода
+                var checkNextCmd = new SqlCommand(@"
+SELECT COUNT(*) FROM LessonSlots 
+WHERE InstructorId = @InstructorId 
+  AND CarId = @CarId
+  AND LessonDate BETWEEN @StartDate AND @EndDate", conn);
+                checkNextCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                checkNextCmd.Parameters.AddWithValue("@CarId", carId);
+                checkNextCmd.Parameters.AddWithValue("@StartDate", nextMonthFirstDay);
+                checkNextCmd.Parameters.AddWithValue("@EndDate", nextMonthLastDay);
+
+                int nextCount = (int)checkNextCmd.ExecuteScalar();
+
+                if (nextCount == 0)
+                {
+                    CreateSlotsForInstructorAndCar(instructorId, carId, nextMonthFirstDay, nextMonthLastDay);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Создает слоты для конкретного инструктора и машины на указанный период
+        /// </summary>
+        public void CreateSlotsForInstructorAndCar(int instructorId, int carId, DateTime startDate, DateTime endDate)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                var timeSlots = new[]
+                {
+            new TimeSpan(9, 0, 0), new TimeSpan(11, 0, 0),
+            new TimeSpan(11, 0, 0), new TimeSpan(13, 0, 0),
+            new TimeSpan(13, 0, 0), new TimeSpan(15, 0, 0),
+            new TimeSpan(15, 0, 0), new TimeSpan(17, 0, 0),
+            new TimeSpan(17, 0, 0), new TimeSpan(19, 0, 0)
+        };
+
+                int totalInserted = 0;
+
+                for (var date = startDate; date <= endDate; date = date.AddDays(1))
+                {
+                    for (int i = 0; i < timeSlots.Length; i += 2)
+                    {
+                        // Проверяем существование слота
+                        var checkCmd = new SqlCommand(@"
+            SELECT COUNT(*) FROM LessonSlots 
+            WHERE InstructorId = @InstructorId 
+              AND CarId = @CarId 
+              AND LessonDate = @Date 
+              AND StartTime = @Start", conn);
+                        checkCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        checkCmd.Parameters.AddWithValue("@CarId", carId);
+                        checkCmd.Parameters.AddWithValue("@Date", date);
+                        checkCmd.Parameters.AddWithValue("@Start", timeSlots[i]);
+
+                        if ((int)checkCmd.ExecuteScalar() == 0)
+                        {
+                            var insertCmd = new SqlCommand(@"
+                INSERT INTO LessonSlots (InstructorId, CarId, LessonDate, StartTime, EndTime, IsAvailable, CreatedDate)
+                VALUES (@InstructorId, @CarId, @Date, @Start, @End, 1, GETDATE())", conn);
+                            insertCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                            insertCmd.Parameters.AddWithValue("@CarId", carId);
+                            insertCmd.Parameters.AddWithValue("@Date", date);
+                            insertCmd.Parameters.AddWithValue("@Start", timeSlots[i]);
+                            insertCmd.Parameters.AddWithValue("@End", timeSlots[i + 1]);
+                            insertCmd.ExecuteNonQuery();
+                            totalInserted++;
+                        }
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Создано слотов для инструктора {instructorId}: {totalInserted} за период {startDate:yyyy-MM-dd} - {endDate:yyyy-MM-dd}");
+            }
+        }
+
+        /// <summary>
+        /// Создает слоты на указанный период для всех инструкторов
+        /// </summary>
+        public void CreateSlotsForPeriod(DateTime startDate, DateTime endDate)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                // Получаем всех инструкторов и их машины
+                var cmd = new SqlCommand(@"
+            SELECT e.Id, c.Id 
+            FROM Employees e
+            INNER JOIN Cars c ON e.Id = c.InstructorId
+            WHERE c.IsActive = 1", conn);
+
+                var instructors = new List<(int InstId, int CarId)>();
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        instructors.Add((reader.GetInt32(0), reader.GetInt32(1)));
+                    }
+                }
+
+                if (instructors.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("Нет инструкторов с привязанными машинами");
+                    return;
+                }
+
+                var timeSlots = new[]
+                {
+            new TimeSpan(9, 0, 0), new TimeSpan(11, 0, 0),
+            new TimeSpan(11, 0, 0), new TimeSpan(13, 0, 0),
+            new TimeSpan(13, 0, 0), new TimeSpan(15, 0, 0),
+            new TimeSpan(15, 0, 0), new TimeSpan(17, 0, 0),
+            new TimeSpan(17, 0, 0), new TimeSpan(19, 0, 0)
+        };
+
+                int totalInserted = 0;
+
+                foreach (var (instId, carId) in instructors)
+                {
+                    for (var date = startDate; date <= endDate; date = date.AddDays(1))
+                    {
+                        // Воскресенье - выходной
+                        if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+
+                        for (int i = 0; i < timeSlots.Length; i += 2)
+                        {
+                            // Проверяем существование слота
+                            var checkCmd = new SqlCommand(@"
+                        SELECT COUNT(*) FROM LessonSlots 
+                        WHERE InstructorId = @InstId 
+                          AND CarId = @CarId 
+                          AND LessonDate = @Date 
+                          AND StartTime = @Start", conn);
+                            checkCmd.Parameters.AddWithValue("@InstId", instId);
+                            checkCmd.Parameters.AddWithValue("@CarId", carId);
+                            checkCmd.Parameters.AddWithValue("@Date", date);
+                            checkCmd.Parameters.AddWithValue("@Start", timeSlots[i]);
+
+                            if ((int)checkCmd.ExecuteScalar() == 0)
+                            {
+                                var insertCmd = new SqlCommand(@"
+                            INSERT INTO LessonSlots (InstructorId, CarId, LessonDate, StartTime, EndTime, IsAvailable, CreatedDate)
+                            VALUES (@InstId, @CarId, @Date, @Start, @End, 1, GETDATE())", conn);
+                                insertCmd.Parameters.AddWithValue("@InstId", instId);
+                                insertCmd.Parameters.AddWithValue("@CarId", carId);
+                                insertCmd.Parameters.AddWithValue("@Date", date);
+                                insertCmd.Parameters.AddWithValue("@Start", timeSlots[i]);
+                                insertCmd.Parameters.AddWithValue("@End", timeSlots[i + 1]);
+                                insertCmd.ExecuteNonQuery();
+                                totalInserted++;
+                            }
+                        }
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Создано слотов: {totalInserted} за период {startDate:yyyy-MM-dd} - {endDate:yyyy-MM-dd}");
+            }
+        }
+
+        /// <summary>
+        /// Отмена брони без штрафа (слот освобождается)
+        /// </summary>
+        public void CancelLessonOnly(int lessonId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        // Получаем SlotId
+                        var getSlotCmd = new SqlCommand("SELECT SlotId FROM DrivingLessons WHERE Id = @LessonId", conn, transaction);
+                        getSlotCmd.Parameters.AddWithValue("@LessonId", lessonId);
+                        var slotId = getSlotCmd.ExecuteScalar() as int?;
+
+                        // Удаляем урок
+                        var deleteCmd = new SqlCommand("DELETE FROM DrivingLessons WHERE Id = @LessonId", conn, transaction);
+                        deleteCmd.Parameters.AddWithValue("@LessonId", lessonId);
+                        deleteCmd.ExecuteNonQuery();
+
+                        // Освобождаем слот
+                        if (slotId.HasValue)
+                        {
+                            var slotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 1 WHERE Id = @SlotId", conn, transaction);
+                            slotCmd.Parameters.AddWithValue("@SlotId", slotId.Value);
+                            slotCmd.ExecuteNonQuery();
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Отметить урок как проведенный
+        /// </summary>
+        public void MarkLessonAsCompleted(int lessonId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        // Получаем информацию об уроке
+                        var getInfoCmd = new SqlCommand(@"
+                    SELECT StudentId, SlotId, InstructorId, CarId, LessonDate, StartTime 
+                    FROM DrivingLessons WHERE Id = @LessonId", conn, transaction);
+                        getInfoCmd.Parameters.AddWithValue("@LessonId", lessonId);
+
+                        int studentId = 0;
+                        int? slotId = null;
+                        int instructorId = 0;
+                        int carId = 0;
+                        DateTime lessonDate = DateTime.Today;
+                        TimeSpan startTime = TimeSpan.Zero;
+
+                        using (var reader = getInfoCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                studentId = reader.GetInt32(0);
+                                slotId = reader.IsDBNull(1) ? null : (int?)reader.GetInt32(1);
+                                instructorId = reader.GetInt32(2);
+                                carId = reader.GetInt32(3);
+                                lessonDate = reader.GetDateTime(4);
+                                startTime = TimeSpan.Parse(reader[5].ToString());
+                            }
+                            else
+                            {
+                                throw new Exception("Урок не найден");
+                            }
+                        }
+
+                        // Обновляем статус урока
+                        var updateCmd = new SqlCommand(@"
+                    UPDATE DrivingLessons 
+                    SET Status = 'Completed' 
+                    WHERE Id = @LessonId", conn, transaction);
+                        updateCmd.Parameters.AddWithValue("@LessonId", lessonId);
+                        updateCmd.ExecuteNonQuery();
+
+                        // Обновляем счетчик проведенных уроков у студента
+                        var studentCmd = new SqlCommand(@"
+                    UPDATE Students 
+                    SET CompletedLessons = ISNULL(CompletedLessons, 0) + 1
+                    WHERE Id = @StudentId", conn, transaction);
+                        studentCmd.Parameters.AddWithValue("@StudentId", studentId);
+                        studentCmd.ExecuteNonQuery();
+
+                        // Если слот был занят, освобождаем его
+                        if (slotId.HasValue)
+                        {
+                            var slotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 1 WHERE Id = @SlotId", conn, transaction);
+                            slotCmd.Parameters.AddWithValue("@SlotId", slotId.Value);
+                            slotCmd.ExecuteNonQuery();
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Отметить урок как прогул
+        /// </summary>
+        public void MarkLessonAsNoShow(int lessonId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        // Получаем информацию об уроке
+                        var getInfoCmd = new SqlCommand(@"
+                    SELECT StudentId, SlotId, InstructorId, CarId, LessonDate, StartTime 
+                    FROM DrivingLessons WHERE Id = @LessonId", conn, transaction);
+                        getInfoCmd.Parameters.AddWithValue("@LessonId", lessonId);
+
+                        int studentId = 0;
+                        int? slotId = null;
+
+                        using (var reader = getInfoCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                studentId = reader.GetInt32(0);
+                                slotId = reader.IsDBNull(1) ? null : (int?)reader.GetInt32(1);
+                            }
+                            else
+                            {
+                                throw new Exception("Урок не найден");
+                            }
+                        }
+
+                        // Обновляем статус урока
+                        var updateCmd = new SqlCommand(@"
+                    UPDATE DrivingLessons 
+                    SET Status = 'NoShow' 
+                    WHERE Id = @LessonId", conn, transaction);
+                        updateCmd.Parameters.AddWithValue("@LessonId", lessonId);
+                        updateCmd.ExecuteNonQuery();
+
+                        // Обновляем счетчик пропусков у студента
+                        var studentCmd = new SqlCommand(@"
+                    UPDATE Students 
+                    SET MissedLessons = ISNULL(MissedLessons, 0) + 1
+                    WHERE Id = @StudentId", conn, transaction);
+                        studentCmd.Parameters.AddWithValue("@StudentId", studentId);
+                        studentCmd.ExecuteNonQuery();
+
+                        // Если слот был занят, освобождаем его
+                        if (slotId.HasValue)
+                        {
+                            var slotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 1 WHERE Id = @SlotId", conn, transaction);
+                            slotCmd.Parameters.AddWithValue("@SlotId", slotId.Value);
+                            slotCmd.ExecuteNonQuery();
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ручное бронирование на любую дату и время
+        /// </summary>
+        public void ManualBookLesson(int studentId, int instructorId, int carId, DateTime date, TimeSpan startTime, TimeSpan endTime)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        // Проверяем или создаем слот
+                        var checkSlotCmd = new SqlCommand(@"
+                    SELECT Id, IsAvailable FROM LessonSlots 
+                    WHERE InstructorId = @InstructorId AND CarId = @CarId 
+                    AND LessonDate = @Date AND StartTime = @StartTime", conn, transaction);
+                        checkSlotCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        checkSlotCmd.Parameters.AddWithValue("@CarId", carId);
+                        checkSlotCmd.Parameters.AddWithValue("@Date", date);
+                        checkSlotCmd.Parameters.AddWithValue("@StartTime", startTime);
+
+                        int slotId = 0;
+                        bool isAvailable = false;
+
+                        using (var reader = checkSlotCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                slotId = reader.GetInt32(0);
+                                isAvailable = reader.GetBoolean(1);
+                            }
+                        }
+
+                        // Если слота нет - создаем
+                        if (slotId == 0)
+                        {
+                            var insertSlotCmd = new SqlCommand(@"
+                        INSERT INTO LessonSlots (InstructorId, CarId, LessonDate, StartTime, EndTime, IsAvailable, CreatedDate)
+                        VALUES (@InstructorId, @CarId, @Date, @StartTime, @EndTime, 1, GETDATE());
+                        SELECT SCOPE_IDENTITY();", conn, transaction);
+                            insertSlotCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                            insertSlotCmd.Parameters.AddWithValue("@CarId", carId);
+                            insertSlotCmd.Parameters.AddWithValue("@Date", date);
+                            insertSlotCmd.Parameters.AddWithValue("@StartTime", startTime);
+                            insertSlotCmd.Parameters.AddWithValue("@EndTime", endTime);
+
+                            slotId = Convert.ToInt32(insertSlotCmd.ExecuteScalar());
+                            isAvailable = true;
+                        }
+
+                        // Проверяем, свободен ли слот
+                        if (!isAvailable)
+                        {
+                            throw new Exception("Этот слот уже занят другим студентом!");
+                        }
+
+                        // Проверяем, нет ли уже урока у этого студента на это время
+                        var checkLessonCmd = new SqlCommand(@"
+                    SELECT COUNT(*) FROM DrivingLessons 
+                    WHERE StudentId = @StudentId 
+                    AND LessonDate = @Date 
+                    AND StartTime = @StartTime", conn, transaction);
+                        checkLessonCmd.Parameters.AddWithValue("@StudentId", studentId);
+                        checkLessonCmd.Parameters.AddWithValue("@Date", date);
+                        checkLessonCmd.Parameters.AddWithValue("@StartTime", startTime);
+
+                        int existingCount = (int)checkLessonCmd.ExecuteScalar();
+                        if (existingCount > 0)
+                        {
+                            throw new Exception("У студента уже есть урок на это время!");
+                        }
+
+                        // Бронируем урок
+                        var insertLessonCmd = new SqlCommand(@"
+                    INSERT INTO DrivingLessons (StudentId, InstructorId, CarId, SlotId, LessonDate, StartTime, EndTime, Status, CreatedAt)
+                    VALUES (@StudentId, @InstructorId, @CarId, @SlotId, @Date, @StartTime, @EndTime, 'Booked', GETDATE())", conn, transaction);
+                        insertLessonCmd.Parameters.AddWithValue("@StudentId", studentId);
+                        insertLessonCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        insertLessonCmd.Parameters.AddWithValue("@CarId", carId);
+                        insertLessonCmd.Parameters.AddWithValue("@SlotId", slotId);
+                        insertLessonCmd.Parameters.AddWithValue("@Date", date);
+                        insertLessonCmd.Parameters.AddWithValue("@StartTime", startTime);
+                        insertLessonCmd.Parameters.AddWithValue("@EndTime", endTime);
+                        insertLessonCmd.ExecuteNonQuery();
+
+                        // Закрываем слот
+                        var updateSlotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 0 WHERE Id = @SlotId", conn, transaction);
+                        updateSlotCmd.Parameters.AddWithValue("@SlotId", slotId);
+                        updateSlotCmd.ExecuteNonQuery();
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Автоматическая отметка прошедших уроков как проведенных
+        /// </summary>
+        public void AutoCompletePastLessons()
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                // Находим все уроки со статусом Booked, которые уже прошли
+                var cmd = new SqlCommand(@"
+            UPDATE DrivingLessons 
+            SET Status = 'Completed' 
+            WHERE Status = 'Booked' 
+            AND LessonDate < CAST(GETDATE() AS DATE)", conn);
+
+                int updated = cmd.ExecuteNonQuery();
+                if (updated > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Автоматически отмечено {updated} прошедших уроков");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Получение количества уроков для категории студента (часы / 2)
+        /// </summary>
+        public int GetLessonsCountByCategory(int studentId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+            SELECT ISNULL(vc.LessonsCount, 28) 
+            FROM Students s
+            LEFT JOIN VehicleCategories vc ON s.CategoryId = vc.Id
+            WHERE s.Id = @StudentId", conn);
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                var result = cmd.ExecuteScalar();
+                int hours = result != null ? Convert.ToInt32(result) : 28;
+
+                // Делим часы на 2, так как один урок = 2 часа
+                return hours / 2;
+            }
+        }
+
+        /// <summary>
+        /// Проверка и бронирование урока (с учетом допов)
+        /// </summary>
+        public bool TryBookLesson(int studentId, int slotId, out string message)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                // Получаем категорию студента и количество уроков
+                var getCategoryCmd = new SqlCommand(@"
+            SELECT c.LessonsCount, c.Name 
+            FROM Students s
+            JOIN Categories c ON s.CategoryId = c.Id
+            WHERE s.Id = @StudentId", conn);
+                getCategoryCmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                int totalLessons = 28;
+                string categoryName = "";
+
+                using (var reader = getCategoryCmd.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        totalLessons = reader.GetInt32(0);
+                        categoryName = reader.GetString(1);
+                    }
+                }
+
+                // Считаем проведенные и пропущенные уроки
+                var lessons = LoadStudentLessons(studentId);
+                var completed = lessons.Count(l => l.Status == "Completed");
+                var noShow = lessons.Count(l => l.Status == "NoShow");
+                var booked = lessons.Count(l => l.Status == "Booked");
+
+                int used = completed + noShow;
+                int remaining = totalLessons - used;
+
+                // Если есть свободные уроки
+                if (remaining > 0)
+                {
+                    message = "";
+                    return true;
+                }
+
+                // Если уроки закончились - спрашиваем про доп
+                message = $"У студента закончились уроки по категории '{categoryName}' (всего {totalLessons}).\n\nОтметить как дополнительный урок?";
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Бронирование дополнительного урока
+        /// </summary>
+        public void BookExtraLesson(int studentId, int slotId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        // Получаем информацию о слоте
+                        var slotCmd = new SqlCommand(@"
+                    SELECT InstructorId, CarId, LessonDate, StartTime, EndTime 
+                    FROM LessonSlots 
+                    WHERE Id = @SlotId AND IsAvailable = 1", conn, transaction);
+                        slotCmd.Parameters.AddWithValue("@SlotId", slotId);
+
+                        int instructorId = 0, carId = 0;
+                        DateTime lessonDate = DateTime.Today;
+                        TimeSpan startTime = TimeSpan.Zero, endTime = TimeSpan.Zero;
+
+                        using (var reader = slotCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                instructorId = reader.GetInt32(0);
+                                carId = reader.GetInt32(1);
+                                lessonDate = reader.GetDateTime(2);
+                                startTime = TimeSpan.Parse(reader[3].ToString());
+                                endTime = TimeSpan.Parse(reader[4].ToString());
+                            }
+                            else
+                            {
+                                throw new Exception("Слот не найден или уже занят");
+                            }
+                        }
+
+                        // Создаем бронирование как дополнительный урок
+                        var insertCmd = new SqlCommand(@"
+                    INSERT INTO DrivingLessons (StudentId, InstructorId, CarId, SlotId, LessonDate, StartTime, EndTime, Status, CreatedAt, IsExtra)
+                    VALUES (@StudentId, @InstructorId, @CarId, @SlotId, @LessonDate, @StartTime, @EndTime, 'Booked', GETDATE(), 1)", conn, transaction);
+
+                        insertCmd.Parameters.AddWithValue("@StudentId", studentId);
+                        insertCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        insertCmd.Parameters.AddWithValue("@CarId", carId);
+                        insertCmd.Parameters.AddWithValue("@SlotId", slotId);
+                        insertCmd.Parameters.AddWithValue("@LessonDate", lessonDate);
+                        insertCmd.Parameters.AddWithValue("@StartTime", startTime);
+                        insertCmd.Parameters.AddWithValue("@EndTime", endTime);
+                        insertCmd.ExecuteNonQuery();
+
+                        // Закрываем слот
+                        var updateSlotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 0 WHERE Id = @SlotId", conn, transaction);
+                        updateSlotCmd.Parameters.AddWithValue("@SlotId", slotId);
+                        updateSlotCmd.ExecuteNonQuery();
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Сброс статуса урока (исправление ошибки)
+        /// </summary>
+        /// <summary>
+        /// Сброс статуса урока (удаление урока, слот становится свободным)
+        /// </summary>
+        public void ResetLessonStatus(int lessonId)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        // Получаем информацию об уроке
+                        var getInfoCmd = new SqlCommand(@"
+                    SELECT StudentId, SlotId, Status
+                    FROM DrivingLessons WHERE Id = @LessonId", conn, transaction);
+                        getInfoCmd.Parameters.AddWithValue("@LessonId", lessonId);
+
+                        int studentId = 0;
+                        int? slotId = null;
+                        string oldStatus = "";
+
+                        using (var reader = getInfoCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                studentId = reader.GetInt32(0);
+                                slotId = reader.IsDBNull(1) ? null : (int?)reader.GetInt32(1);
+                                oldStatus = reader[2]?.ToString() ?? "";
+                            }
+                            else
+                            {
+                                throw new Exception("Урок не найден");
+                            }
+                        }
+
+                        // Если урок был проведен или пропущен - откатываем счетчики
+                        if (oldStatus == "Completed")
+                        {
+                            var studentCmd = new SqlCommand(@"
+                        UPDATE Students 
+                        SET CompletedLessons = ISNULL(CompletedLessons, 0) - 1
+                        WHERE Id = @StudentId", conn, transaction);
+                            studentCmd.Parameters.AddWithValue("@StudentId", studentId);
+                            studentCmd.ExecuteNonQuery();
+                        }
+                        else if (oldStatus == "NoShow")
+                        {
+                            var studentCmd = new SqlCommand(@"
+                        UPDATE Students 
+                        SET MissedLessons = ISNULL(MissedLessons, 0) - 1
+                        WHERE Id = @StudentId", conn, transaction);
+                            studentCmd.Parameters.AddWithValue("@StudentId", studentId);
+                            studentCmd.ExecuteNonQuery();
+                        }
+
+                        // Удаляем урок
+                        var deleteCmd = new SqlCommand(@"
+                    DELETE FROM DrivingLessons WHERE Id = @LessonId", conn, transaction);
+                        deleteCmd.Parameters.AddWithValue("@LessonId", lessonId);
+                        deleteCmd.ExecuteNonQuery();
+
+                        // Освобождаем слот (делаем доступным)
+                        if (slotId.HasValue)
+                        {
+                            var slotCmd = new SqlCommand(@"
+                        UPDATE LessonSlots SET IsAvailable = 1 WHERE Id = @SlotId", conn, transaction);
+                            slotCmd.Parameters.AddWithValue("@SlotId", slotId.Value);
+                            slotCmd.ExecuteNonQuery();
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Получение списка инструкторов (полный для поиска)
+        /// </summary>
+        public List<Employee> GetInstructorsList()
+        {
+            var instructors = new List<Employee>();
+
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+            SELECT e.Id, e.LastName, e.FirstName, e.MiddleName, e.Position, 
+                   ISNULL(c.Id, 0) as CarId
+            FROM Employees e
+            LEFT JOIN Cars c ON e.Id = c.InstructorId
+            WHERE e.Position LIKE '%инструктор%' OR e.Position LIKE '%вожден%'
+            GROUP BY e.Id, e.LastName, e.FirstName, e.MiddleName, e.Position, c.Id
+            ORDER BY e.LastName, e.FirstName", conn);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var employee = new Employee
+                        {
+                            Id = reader.GetInt32(0),
+                            LastName = reader[1]?.ToString() ?? "",
+                            FirstName = reader[2]?.ToString() ?? "",
+                            MiddleName = reader[3]?.ToString(),
+                            Position = reader[4]?.ToString() ?? "",
+                            CarId = reader.GetInt32(5)
+                        };
+                        instructors.Add(employee);
+                    }
+                }
+            }
+
+            return instructors;
+        }
+
+        /// <summary>
+        /// Получение списка инструкторов (упрощенный для выбора)
+        /// </summary>
+        public List<(int Id, string Name, int CarId)> GetInstructors()
+        {
+            var instructors = new List<(int Id, string Name, int CarId)>();
+
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+            SELECT e.Id, 
+                   e.LastName + ' ' + e.FirstName + ' - ' + ISNULL(e.Position, 'Инструктор') as Name,
+                   ISNULL(c.Id, 0) as CarId
+            FROM Employees e
+            LEFT JOIN Cars c ON e.Id = c.InstructorId
+            WHERE e.Position LIKE '%инструктор%' OR e.Position LIKE '%вожден%'
+            GROUP BY e.Id, e.LastName, e.FirstName, e.Position, c.Id
+            ORDER BY e.LastName, e.FirstName", conn);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        instructors.Add((
+                            Id: reader.GetInt32(0),
+                            Name: reader[1]?.ToString() ?? "Инструктор",
+                            CarId: reader.GetInt32(2)
+                        ));
+                    }
+                }
+            }
+
+            return instructors;
+        }
+
+        /// <summary>
+        /// Получение временных слотов инструктора
+        /// </summary>
+        public List<string> GetInstructorTimeSlots(int instructorId)
+        {
+            var timeSlots = new List<string>();
+
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+            SELECT CONVERT(varchar(5), StartTime, 108) + ' - ' + CONVERT(varchar(5), EndTime, 108) as TimeSlot
+            FROM LessonSlots 
+            WHERE InstructorId = @InstructorId
+            GROUP BY StartTime, EndTime
+            ORDER BY StartTime", conn);
+                cmd.Parameters.AddWithValue("@InstructorId", instructorId);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        timeSlots.Add(reader["TimeSlot"].ToString());
+                    }
+                }
+            }
+
+            return timeSlots;
+        }
+
+        /// <summary>
+        /// Получение уроков инструктора
+        /// </summary>
+        public List<DrivingLesson> LoadInstructorLessons(int instructorId)
+        {
+            var lessons = new List<DrivingLesson>();
+
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+            SELECT dl.*, 
+                   s.LastName + ' ' + s.FirstName as StudentName,
+                   e.LastName + ' ' + e.FirstName as InstructorName,
+                   c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo
+            FROM DrivingLessons dl
+            JOIN Students s ON dl.StudentId = s.Id
+            JOIN Employees e ON dl.InstructorId = e.Id
+            JOIN Cars c ON dl.CarId = c.Id
+            WHERE dl.InstructorId = @InstructorId
+            ORDER BY dl.LessonDate DESC, dl.StartTime DESC", conn);
+                cmd.Parameters.AddWithValue("@InstructorId", instructorId);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        lessons.Add(new DrivingLesson
+                        {
+                            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                            StudentId = reader.GetInt32(reader.GetOrdinal("StudentId")),
+                            InstructorId = reader.GetInt32(reader.GetOrdinal("InstructorId")),
+                            CarId = reader.GetInt32(reader.GetOrdinal("CarId")),
+                            SlotId = reader["SlotId"] as int?,
+                            LessonDate = reader.GetDateTime(reader.GetOrdinal("LessonDate")),
+                            StartTime = TimeSpan.Parse(reader["StartTime"].ToString()),
+                            EndTime = TimeSpan.Parse(reader["EndTime"].ToString()),
+                            Status = reader["Status"]?.ToString() ?? "Booked",
+                            CanceledAt = reader["CanceledAt"] as DateTime?,
+                            IsCancelledByStudent = reader["IsCancelledByStudent"] as bool? ?? false,
+                            CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt")),
+                            IsExtra = reader["IsExtra"] != DBNull.Value && Convert.ToBoolean(reader["IsExtra"]),
+                            StudentName = reader["StudentName"]?.ToString() ?? "",
+                            InstructorName = reader["InstructorName"]?.ToString() ?? "",
+                            CarInfo = reader["CarInfo"]?.ToString() ?? ""
+                        });
+                    }
+                }
+            }
+
+            return lessons;
+        }
+
+        /// <summary>
+        /// Добавление временного слота
+        /// </summary>
+        public void AddTimeSlot(int instructorId, int carId, string startTime, string endTime)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+
+                var startDate = DateTime.Today.AddMonths(-6);
+                var endDate = DateTime.Today.AddMonths(6);
+
+                for (var date = startDate; date <= endDate; date = date.AddDays(1))
+                {
+                    var checkCmd = new SqlCommand(@"
+                SELECT COUNT(*) FROM LessonSlots 
+                WHERE InstructorId = @InstructorId AND CarId = @CarId 
+                AND LessonDate = @Date AND StartTime = @StartTime", conn);
+                    checkCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                    checkCmd.Parameters.AddWithValue("@CarId", carId);
+                    checkCmd.Parameters.AddWithValue("@Date", date);
+                    checkCmd.Parameters.AddWithValue("@StartTime", startTime);
+
+                    if ((int)checkCmd.ExecuteScalar() == 0)
+                    {
+                        var insertCmd = new SqlCommand(@"
+                    INSERT INTO LessonSlots (InstructorId, CarId, LessonDate, StartTime, EndTime, IsAvailable, CreatedDate)
+                    VALUES (@InstructorId, @CarId, @Date, @StartTime, @EndTime, 1, GETDATE())", conn);
+                        insertCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        insertCmd.Parameters.AddWithValue("@CarId", carId);
+                        insertCmd.Parameters.AddWithValue("@Date", date);
+                        insertCmd.Parameters.AddWithValue("@StartTime", startTime);
+                        insertCmd.Parameters.AddWithValue("@EndTime", endTime);
+                        insertCmd.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Удаление временного слота
+        /// </summary>
+        public void DeleteTimeSlot(int instructorId, int carId, string startTime, string endTime)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        var deleteLessonsCmd = new SqlCommand(@"
+                    DELETE FROM DrivingLessons 
+                    WHERE SlotId IN (SELECT Id FROM LessonSlots 
+                                     WHERE InstructorId = @InstructorId AND CarId = @CarId 
+                                     AND StartTime = @StartTime AND EndTime = @EndTime)", conn, transaction);
+                        deleteLessonsCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        deleteLessonsCmd.Parameters.AddWithValue("@CarId", carId);
+                        deleteLessonsCmd.Parameters.AddWithValue("@StartTime", startTime);
+                        deleteLessonsCmd.Parameters.AddWithValue("@EndTime", endTime);
+                        deleteLessonsCmd.ExecuteNonQuery();
+
+                        var deleteSlotsCmd = new SqlCommand(@"
+                    DELETE FROM LessonSlots 
+                    WHERE InstructorId = @InstructorId AND CarId = @CarId 
+                    AND StartTime = @StartTime AND EndTime = @EndTime", conn, transaction);
+                        deleteSlotsCmd.Parameters.AddWithValue("@InstructorId", instructorId);
+                        deleteSlotsCmd.Parameters.AddWithValue("@CarId", carId);
+                        deleteSlotsCmd.Parameters.AddWithValue("@StartTime", startTime);
+                        deleteSlotsCmd.Parameters.AddWithValue("@EndTime", endTime);
+                        deleteSlotsCmd.ExecuteNonQuery();
+
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Проверка, были ли внесены платежи у студента
+        /// </summary>
+        public bool HasPayments(int studentId)
+        {
+            var payments = LoadStudentPayments(studentId);
+            return payments.Any();
+        }
+
+        /// <summary>
+        /// Проверка, был ли внесен первый платеж
+        /// </summary>
+        public bool HasFirstPayment(int studentId)
+        {
+            var payments = LoadStudentPayments(studentId);
+            return payments.Any();
+        }
+
+        /// <summary>
+        /// Проверка необходимости второго платежа после 10 уроков (включая прогулы)
+        /// </summary>
+        public bool CheckSecondPaymentRequired(int studentId, out decimal remainingAmount)
+        {
+            remainingAmount = 0;
+
+            var student = LoadStudent(studentId);
+            if (student == null) return false;
+
+            var payments = LoadStudentPayments(studentId);
+            var totalPaid = payments.Sum(p => p.Amount);
+
+            var lessons = LoadStudentLessons(studentId);
+            // Считаем проведенные + прогулы (списанные уроки)
+            var usedLessons = lessons.Count(l => l.Status == "Completed" || l.Status == "NoShow");
+
+            // Проверяем, прошло ли 10 уроков (включая прогулы)
+            if (payments.Any() && usedLessons >= 10)
+            {
+                // Проверяем, не был ли уже внесен второй платеж
+                var hasSecondPayment = payments.Any(p => p.PaymentType == "SecondPayment" ||
+                                                        p.PaymentType == "Основной платеж" ||
+                                                        p.PaymentType == "Остаток" ||
+                                                        (p.PaymentType == "Платеж" && payments.Count > 1));
+
+                if (!hasSecondPayment)
+                {
+                    var finalAmount = student.FinalAmount;
+                    remainingAmount = finalAmount - totalPaid;
+                    return remainingAmount > 0;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Проверка, был ли внесен второй платеж
+        /// </summary>
+        public bool HasSecondPayment(int studentId)
+        {
+            var payments = LoadStudentPayments(studentId);
+            // Если есть больше одного платежа или есть платеж с типом "Основной платеж"
+            return payments.Count > 1 ||
+                   payments.Any(p => p.PaymentType == "SecondPayment" ||
+                                    p.PaymentType == "Основной платеж" ||
+                                    p.PaymentType == "Остаток");
+        }
+
+        /// <summary>
+        /// Получение количества проведенных уроков
+        /// </summary>
+        public int GetCompletedLessonsCount(int studentId)
+        {
+            var lessons = LoadStudentLessons(studentId);
+            return lessons.Count(l => l.Status == "Completed");
+        }
+
+        public string GetConnectionString()
+        {
+            return _connectionString;
         }
     } // <-- Закрывающая скобка класса SqlDataService (СТРОКА 2559)
 

@@ -64,6 +64,22 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>DrivingSchoolDBDataSet.xsd</DependentUpon>
     </Compile>
+    <Compile Include="Models\DrivingLesson.cs" />
+    <Compile Include="Models\ExamModels.cs" />
+    <Compile Include="Models\LessonSlot.cs" />
+    <Compile Include="Services\ExamService.cs" />
+    <Compile Include="Views\CreateExamScheduleDialog.xaml.cs">
+      <DependentUpon>CreateExamScheduleDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\DrivingLessonsPage.xaml.cs">
+      <DependentUpon>DrivingLessonsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\ExamManagementPage.xaml.cs">
+      <DependentUpon>ExamManagementPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\ExamResultDialog.xaml.cs">
+      <DependentUpon>ExamResultDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Views\FinancialReportsPage.xaml.cs">
       <DependentUpon>FinancialReportsPage.xaml</DependentUpon>
     </Compile>
@@ -167,6 +183,22 @@
     <Compile Include="Views\TuitionEditDialog.xaml.cs">
       <DependentUpon>TuitionEditDialog.xaml</DependentUpon>
     </Compile>
+    <Page Include="Views\CreateExamScheduleDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\DrivingLessonsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\ExamManagementPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\ExamResultDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="Views\FinancialReportsPage.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>

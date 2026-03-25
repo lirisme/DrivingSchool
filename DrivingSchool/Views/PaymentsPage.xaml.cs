@@ -196,9 +196,9 @@ namespace DrivingSchool.Views
 
         private void UpdateTuitionInfo()
         {
-            TuitionAmountText.Text = $"Стоимость обучения: {_tuitionAmount:N2} руб.";
-            DiscountAmountText.Text = $"Скидка: {_discountAmount:N2} руб.";
-            FinalAmountText.Text = $"Итого к оплате: {_finalAmount:N2} руб.";
+            TuitionAmountText.Text = $"{_tuitionAmount:N2} руб.";
+            DiscountAmountText.Text = $"{_discountAmount:N2} руб.";
+            FinalAmountText.Text = $"{_finalAmount:N2} руб.";
             PaidAmountText.Text = $"Оплачено: {_paidAmount:N2} руб.";
 
             var remaining = _finalAmount - _paidAmount;
@@ -569,6 +569,23 @@ namespace DrivingSchool.Views
             }
         }
 
+        public void SelectStudent(int studentId)
+        {
+            try
+            {
+                _selectedStudent = _dataService.LoadStudent(studentId);
+                if (_selectedStudent != null)
+                {
+                    UpdateSelectedStudentPanel();
+                    LoadStudentTuitionInfo();
+                    LoadPaymentsForStudent();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Ошибка выбора студента: {ex.Message}");
+            }
+        }
 
     }
 }
