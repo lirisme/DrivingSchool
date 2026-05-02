@@ -13,7 +13,7 @@ namespace DrivingSchool.Models
         public string Duration { get; set; }
         public DateTime CreatedDate { get; set; }
         public DateTime? ModifiedDate { get; set; }
-
+        
         // Количество студентов (заполняется отдельно)
         public int StudentCount { get; set; }
 

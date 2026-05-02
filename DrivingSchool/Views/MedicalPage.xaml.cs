@@ -393,6 +393,14 @@ namespace DrivingSchool.Views
             ApplyFilter();
         }
 
+        private string GetStatusColor(DateTime validUntil)
+        {
+            var daysLeft = (validUntil - DateTime.Today).Days;
+            if (daysLeft < 0) return "Red";
+            if (daysLeft <= 30) return "Yellow";
+            return "Green";
+        }
+
         private void MedicalGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             if (MedicalGrid.SelectedItem != null && _selectedStudent != null)

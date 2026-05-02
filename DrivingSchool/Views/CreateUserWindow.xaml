@@ -1,0 +1,48 @@
+﻿<Window x:Class="DrivingSchool.Views.CreateUserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Создание пользователя" Height="400" Width="400" WindowStartupLocation="CenterOwner">
+
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Создание пользователя" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5">
+            <TextBlock Text="ФИО:" Width="80" FontWeight="Bold"/>
+            <TextBox x:Name="FullNameBox" Width="200"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,5">
+            <TextBlock Text="Логин:" Width="80" FontWeight="Bold"/>
+            <TextBox x:Name="LoginBox" Width="200"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,5">
+            <TextBlock Text="Пароль:" Width="80" FontWeight="Bold"/>
+            <PasswordBox x:Name="PasswordBox" Width="200"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,5">
+            <TextBlock Text="Роль:" Width="80" FontWeight="Bold"/>
+            <ComboBox x:Name="RoleBox" Width="200" SelectedIndex="0">
+                <ComboBoxItem Content="Пользователь" Tag="User"/>
+                <ComboBoxItem Content="Бухгалтер" Tag="Accountant"/>
+                <ComboBoxItem Content="Инструктор" Tag="Instructor"/>
+                <ComboBoxItem Content="Администратор" Tag="Admin"/>
+            </ComboBox>
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20">
+            <Button Content="Создать" Width="100" Click="Create_Click" Background="#4CAF50" Foreground="White"/>
+            <Button Content="Отмена" Width="100" Margin="10,0,0,0" Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

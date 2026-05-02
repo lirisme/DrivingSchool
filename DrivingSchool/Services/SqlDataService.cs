@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace DrivingSchool.Services
 {
@@ -14,7 +16,6 @@ namespace DrivingSchool.Services
 
         public SqlDataService()
         {
-            // Получаем строку подключения из конфигурации
             _connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["DrivingSchoolDB"].ConnectionString;
         }
 
@@ -56,26 +57,27 @@ namespace DrivingSchool.Services
                 {
                     conn.Open();
                     var cmd = new SqlCommand(@"
-                SELECT s.*, 
-                       vc.Code as CategoryCode,
-                       vc.FullName as CategoryName,
-                       sg.Name as GroupName,
-                       e.LastName + ' ' + e.FirstName as InstructorName,
-                       c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
-                       t.Name as TariffName,
-                       ISNULL(s.CompletedLessons, 0) as CompletedLessons,  -- ДОБАВЬТЕ ЭТУ СТРОКУ
-                       ISNULL((
-                           SELECT SUM(Amount) 
-                           FROM Payments p 
-                           WHERE p.StudentId = s.Id
-                       ), 0) as PaidAmount
-                FROM Students s
-                LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
-                LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
-                LEFT JOIN Employees e ON s.InstructorId = e.Id
-                LEFT JOIN Cars c ON s.CarId = c.Id
-                LEFT JOIN Tariffs t ON s.TariffId = t.Id
-                ORDER BY s.LastName, s.FirstName", conn);
+        SELECT s.*, 
+               vc.Code as CategoryCode,
+               vc.FullName as CategoryName,
+               sg.Name as GroupName,
+               e.LastName + ' ' + e.FirstName as InstructorName,
+               c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
+               t.Name as TariffName,
+               ISNULL(s.CompletedLessons, 0) as CompletedLessons,
+               ISNULL(s.MissedLessons, 0) as MissedLessons,
+               ISNULL((
+                   SELECT SUM(Amount) 
+                   FROM Payments p 
+                   WHERE p.StudentId = s.Id
+               ), 0) as PaidAmount
+        FROM Students s
+        LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
+        LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
+        LEFT JOIN Employees e ON s.InstructorId = e.Id
+        LEFT JOIN Cars c ON s.CarId = c.Id
+        LEFT JOIN Tariffs t ON s.TariffId = t.Id
+        ORDER BY s.LastName, s.FirstName", conn);
 
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -88,7 +90,7 @@ namespace DrivingSchool.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки студентов: {ex.Message}");
+                LogError("Ошибка загрузки студентов", ex);
             }
 
             return collection;
@@ -105,26 +107,27 @@ namespace DrivingSchool.Services
                 {
                     conn.Open();
                     var cmd = new SqlCommand(@"
-                SELECT s.*, 
-                       vc.Code as CategoryCode,
-                       vc.FullName as CategoryName,
-                       sg.Name as GroupName,
-                       e.LastName + ' ' + e.FirstName as InstructorName,
-                       c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
-                       t.Name as TariffName,
-                       ISNULL(s.CompletedLessons, 0) as CompletedLessons,  -- ДОБАВЬТЕ ЭТУ СТРОКУ
-                       ISNULL((
-                           SELECT SUM(Amount) 
-                           FROM Payments p 
-                           WHERE p.StudentId = s.Id
-                       ), 0) as PaidAmount
-                FROM Students s
-                LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
-                LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
-                LEFT JOIN Employees e ON s.InstructorId = e.Id
-                LEFT JOIN Cars c ON s.CarId = c.Id
-                LEFT JOIN Tariffs t ON s.TariffId = t.Id
-                WHERE s.Id = @Id", conn);
+        SELECT s.*, 
+               vc.Code as CategoryCode,
+               vc.FullName as CategoryName,
+               sg.Name as GroupName,
+               e.LastName + ' ' + e.FirstName as InstructorName,
+               c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
+               t.Name as TariffName,
+               ISNULL(s.CompletedLessons, 0) as CompletedLessons,
+               ISNULL(s.MissedLessons, 0) as MissedLessons,
+               ISNULL((
+                   SELECT SUM(Amount) 
+                   FROM Payments p 
+                   WHERE p.StudentId = s.Id
+               ), 0) as PaidAmount
+        FROM Students s
+        LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
+        LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
+        LEFT JOIN Employees e ON s.InstructorId = e.Id
+        LEFT JOIN Cars c ON s.CarId = c.Id
+        LEFT JOIN Tariffs t ON s.TariffId = t.Id
+        WHERE s.Id = @Id", conn);
 
                     cmd.Parameters.AddWithValue("@Id", id);
 
@@ -139,83 +142,11 @@ namespace DrivingSchool.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки студента: {ex.Message}");
+                LogError($"Ошибка загрузки студента с ID {id}", ex);
                 throw new Exception($"Ошибка загрузки студента: {ex.Message}");
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Сохранение студента (добавление или обновление)
-        /// </summary>
-        public int SaveStudent(Student student)
-        {
-            try
-            {
-                using (var conn = GetConnection())
-                {
-                    conn.Open();
-                    int studentId;
-
-                    if (student.Id > 0)
-                    {
-                        // Обновление
-                        var cmd = new SqlCommand(@"
-                    UPDATE Students 
-                    SET LastName = @LastName, 
-                        FirstName = @FirstName, 
-                        MiddleName = @MiddleName,
-                        BirthDate = @BirthDate, 
-                        BirthPlace = @BirthPlace, 
-                        Phone = @Phone,
-                        Email = @Email, 
-                        Citizenship = @Citizenship, 
-                        Gender = @Gender,
-                        GroupId = @GroupId, 
-                        VehicleCategoryId = @VehicleCategoryId,
-                        InstructorId = @InstructorId, 
-                        CarId = @CarId,
-                        TuitionAmount = @TuitionAmount,
-                        DiscountAmount = @DiscountAmount,
-                        TariffId = @TariffId,
-                        ModifiedDate = GETDATE()
-                    WHERE Id = @Id", conn);
-
-                        AddStudentParameters(cmd, student);
-                        cmd.Parameters.AddWithValue("@Id", student.Id);
-                        cmd.ExecuteNonQuery();
-                        studentId = student.Id;
-                    }
-                    else
-                    {
-                        // Вставка нового студента
-                        var cmd = new SqlCommand(@"
-                    INSERT INTO Students 
-                    (LastName, FirstName, MiddleName, BirthDate, BirthPlace, Phone, Email, 
-                     Citizenship, Gender, GroupId, VehicleCategoryId, InstructorId, CarId,
-                     TuitionAmount, DiscountAmount, TariffId, CreatedDate)
-                    OUTPUT INSERTED.Id
-                    VALUES 
-                    (@LastName, @FirstName, @MiddleName, @BirthDate, @BirthPlace, @Phone, @Email,
-                     @Citizenship, @Gender, @GroupId, @VehicleCategoryId, @InstructorId, @CarId,
-                     @TuitionAmount, @DiscountAmount, @TariffId, GETDATE())", conn);
-
-                        AddStudentParameters(cmd, student);
-                        studentId = (int)cmd.ExecuteScalar();
-                    }
-
-                    // Синхронизация с StudentTuitions
-                    SyncStudentTuition(conn, studentId, student.TuitionAmount, student.DiscountAmount, student.TariffId);
-
-                    return studentId;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения студента: {ex.Message}");
-                throw new Exception($"Ошибка сохранения студента: {ex.Message}");
-            }
         }
 
         private void SyncStudentTuition(SqlConnection conn, int studentId, decimal tuitionAmount, decimal discountAmount, int? tariffId)
@@ -265,25 +196,55 @@ namespace DrivingSchool.Services
         /// </summary>
         public void DeleteStudent(int studentId)
         {
-            try
+            using (var conn = GetConnection())
             {
-                using (var conn = GetConnection())
+                conn.Open();
+                using (var transaction = conn.BeginTransaction())
                 {
-                    conn.Open();
-                    var cmd = new SqlCommand("DELETE FROM Students WHERE Id = @Id", conn);
-                    cmd.Parameters.AddWithValue("@Id", studentId);
-                    cmd.ExecuteNonQuery();
+                    try
+                    {
+                        // Удаляем связанные данные в правильном порядке (сначала дочерние таблицы)
+                        string[] tables = new string[]
+                        {
+                    "DrivingLessons",      // уроки вождения
+                    "Payments",            // платежи
+                    "StudentTuitions",     // стоимость обучения
+                    "StudentPassportData", // паспортные данные
+                    "StudentSNILS",        // СНИЛС
+                    "StudentMedicalCertificates", // медсправки
+                    "StudentRegistrationAddresses", // адреса
+                    "StudentCertificates", // свидетельства
+                    "StudentDrivingLicenses" // водительские удостоверения
+                        };
+
+                        foreach (string table in tables)
+                        {
+                            var cmd = new SqlCommand($"DELETE FROM {table} WHERE StudentId = @Id", conn, transaction);
+                            cmd.Parameters.AddWithValue("@Id", studentId);
+                            cmd.ExecuteNonQuery();
+                        }
+
+                        // Удаляем самого студента
+                        var deleteStudentCmd = new SqlCommand("DELETE FROM Students WHERE Id = @Id", conn, transaction);
+                        deleteStudentCmd.Parameters.AddWithValue("@Id", studentId);
+                        deleteStudentCmd.ExecuteNonQuery();
+
+                        transaction.Commit();
+
+                        LogInfo($"Студент с ID {studentId} успешно удален");
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback();
+                        LogError($"Ошибка удаления студента с ID {studentId}", ex);
+                        throw new Exception($"Ошибка удаления студента: {ex.Message}");
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Ошибка удаления студента: {ex.Message}");
-                throw new Exception($"Ошибка удаления студента: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Поиск студентов
+        /// Поиск студентов с экранированием спецсимволов
         /// </summary>
         public StudentCollection SearchStudents(string searchText)
         {
@@ -297,26 +258,33 @@ namespace DrivingSchool.Services
                 using (var conn = GetConnection())
                 {
                     conn.Open();
-                    var cmd = new SqlCommand(@"
-                        SELECT s.*, 
-                               vc.Code as CategoryCode,
-                               vc.FullName as CategoryName,
-                               sg.Name as GroupName,
-                               e.LastName + ' ' + e.FirstName as InstructorName,
-                               c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo
-                        FROM Students s
-                        LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
-                        LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
-                        LEFT JOIN Employees e ON s.InstructorId = e.Id
-                        LEFT JOIN Cars c ON s.CarId = c.Id
-                        WHERE s.LastName LIKE @Search 
-                           OR s.FirstName LIKE @Search
-                           OR s.MiddleName LIKE @Search
-                           OR s.Phone LIKE @Search
-                           OR s.Email LIKE @Search
-                        ORDER BY s.LastName, s.FirstName", conn);
 
-                    cmd.Parameters.AddWithValue("@Search", $"%{searchText}%");
+                    // Экранируем спецсимволы SQL LIKE
+                    string escapedText = searchText.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
+                    string searchPattern = $"%{escapedText}%";
+
+                    var cmd = new SqlCommand(@"
+                SELECT s.*, 
+                       vc.Code as CategoryCode,
+                       vc.FullName as CategoryName,
+                       sg.Name as GroupName,
+                       e.LastName + ' ' + e.FirstName as InstructorName,
+                       c.Brand + ' ' + c.Model + ' (' + c.LicensePlate + ')' as CarInfo,
+                       ISNULL(s.CompletedLessons, 0) as CompletedLessons,
+                       ISNULL(s.MissedLessons, 0) as MissedLessons
+                FROM Students s
+                LEFT JOIN VehicleCategories vc ON s.VehicleCategoryId = vc.Id
+                LEFT JOIN StudyGroups sg ON s.GroupId = sg.Id
+                LEFT JOIN Employees e ON s.InstructorId = e.Id
+                LEFT JOIN Cars c ON s.CarId = c.Id
+                WHERE s.LastName LIKE @Search 
+                   OR s.FirstName LIKE @Search
+                   OR s.MiddleName LIKE @Search
+                   OR s.Phone LIKE @Search
+                   OR s.Email LIKE @Search
+                ORDER BY s.LastName, s.FirstName", conn);
+
+                    cmd.Parameters.AddWithValue("@Search", searchPattern);
 
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -329,7 +297,7 @@ namespace DrivingSchool.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка поиска студентов: {ex.Message}");
+                LogError($"Ошибка поиска студентов: {searchText}", ex);
                 throw new Exception($"Ошибка поиска студентов: {ex.Message}");
             }
 
@@ -368,14 +336,13 @@ namespace DrivingSchool.Services
                     TariffId = reader["TariffId"] as int?,
                     TariffName = reader["TariffName"]?.ToString() ?? "",
                     PaidAmount = reader["PaidAmount"] != DBNull.Value ? Convert.ToDecimal(reader["PaidAmount"]) : 0,
-
-                    // ДОБАВЬТЕ ЭТУ СТРОКУ:
-                    CompletedLessons = reader["CompletedLessons"] != DBNull.Value ? Convert.ToInt32(reader["CompletedLessons"]) : 0
+                    CompletedLessons = reader["CompletedLessons"] != DBNull.Value ? Convert.ToInt32(reader["CompletedLessons"]) : 0,
+                    MissedLessons = reader["MissedLessons"] != DBNull.Value ? Convert.ToInt32(reader["MissedLessons"]) : 0  // Исправлено!
                 };
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка маппинга студента: {ex.Message}");
+                LogError("Ошибка маппинга студента", ex);
                 return new Student();
             }
         }
@@ -1178,56 +1145,117 @@ namespace DrivingSchool.Services
         }
 
         /// <summary>
-        /// Сохранение стоимости обучения
+        /// Сохранение студента (добавление или обновление) с проверкой дубликатов
         /// </summary>
-        public int SaveStudentTuition(StudentTuition tuition)
+        public int SaveStudent(Student student)
         {
+            // Валидация телефона
+            if (!IsValidPhone(student.Phone))
+            {
+                throw new Exception("Некорректный формат номера телефона");
+            }
+
+            // Валидация email (если указан)
+            if (!string.IsNullOrEmpty(student.Email) && !IsValidEmail(student.Email))
+            {
+                throw new Exception("Некорректный формат email");
+            }
+
             try
             {
                 using (var conn = GetConnection())
                 {
                     conn.Open();
 
-                    if (tuition.Id > 0)
+                    // Проверка на дубликат по телефону
+                    var checkCmd = new SqlCommand(
+                        "SELECT COUNT(*) FROM Students WHERE Phone = @Phone AND Id != @Id", conn);
+                    checkCmd.Parameters.AddWithValue("@Phone", student.Phone);
+                    checkCmd.Parameters.AddWithValue("@Id", student.Id > 0 ? student.Id : 0);
+
+                    int exists = (int)checkCmd.ExecuteScalar();
+                    if (exists > 0)
                     {
+                        throw new Exception($"Студент с номером телефона {student.Phone} уже существует!");
+                    }
+
+                    // Проверка на дубликат по email (если указан)
+                    if (!string.IsNullOrEmpty(student.Email))
+                    {
+                        var checkEmailCmd = new SqlCommand(
+                            "SELECT COUNT(*) FROM Students WHERE Email = @Email AND Id != @Id AND Email IS NOT NULL AND Email != ''", conn);
+                        checkEmailCmd.Parameters.AddWithValue("@Email", student.Email);
+                        checkEmailCmd.Parameters.AddWithValue("@Id", student.Id > 0 ? student.Id : 0);
+
+                        int emailExists = (int)checkEmailCmd.ExecuteScalar();
+                        if (emailExists > 0)
+                        {
+                            throw new Exception($"Студент с email {student.Email} уже существует!");
+                        }
+                    }
+
+                    int studentId;
+
+                    if (student.Id > 0)
+                    {
+                        // Обновление
                         var cmd = new SqlCommand(@"
-                            UPDATE StudentTuitions 
-                            SET TariffId = @TariffId, FullAmount = @FullAmount, 
-                                Discount = @Discount, ModifiedDate = GETDATE()
-                            WHERE Id = @Id", conn);
+                    UPDATE Students 
+                    SET LastName = @LastName, 
+                        FirstName = @FirstName, 
+                        MiddleName = @MiddleName,
+                        BirthDate = @BirthDate, 
+                        BirthPlace = @BirthPlace, 
+                        Phone = @Phone,
+                        Email = @Email, 
+                        Citizenship = @Citizenship, 
+                        Gender = @Gender,
+                        GroupId = @GroupId, 
+                        VehicleCategoryId = @VehicleCategoryId,
+                        InstructorId = @InstructorId, 
+                        CarId = @CarId,
+                        TuitionAmount = @TuitionAmount,
+                        DiscountAmount = @DiscountAmount,
+                        TariffId = @TariffId,
+                        ModifiedDate = GETDATE()
+                    WHERE Id = @Id", conn);
 
-                        cmd.Parameters.AddWithValue("@Id", tuition.Id);
-                        cmd.Parameters.AddWithValue("@TariffId", (object)tuition.TariffId ?? DBNull.Value);
-                        cmd.Parameters.AddWithValue("@FullAmount", tuition.FullAmount);
-                        cmd.Parameters.AddWithValue("@Discount", tuition.Discount);
-
+                        AddStudentParameters(cmd, student);
+                        cmd.Parameters.AddWithValue("@Id", student.Id);
                         cmd.ExecuteNonQuery();
-                        return tuition.Id;
+                        studentId = student.Id;
                     }
                     else
                     {
+                        // Вставка нового студента
                         var cmd = new SqlCommand(@"
-                            INSERT INTO StudentTuitions (StudentId, TariffId, FullAmount, Discount, CreatedDate)
-                            OUTPUT INSERTED.Id
-                            VALUES (@StudentId, @TariffId, @FullAmount, @Discount, GETDATE())", conn);
+                    INSERT INTO Students 
+                    (LastName, FirstName, MiddleName, BirthDate, BirthPlace, Phone, Email, 
+                     Citizenship, Gender, GroupId, VehicleCategoryId, InstructorId, CarId,
+                     TuitionAmount, DiscountAmount, TariffId, CreatedDate)
+                    OUTPUT INSERTED.Id
+                    VALUES 
+                    (@LastName, @FirstName, @MiddleName, @BirthDate, @BirthPlace, @Phone, @Email,
+                     @Citizenship, @Gender, @GroupId, @VehicleCategoryId, @InstructorId, @CarId,
+                     @TuitionAmount, @DiscountAmount, @TariffId, GETDATE())", conn);
 
-                        cmd.Parameters.AddWithValue("@StudentId", tuition.StudentId);
-                        cmd.Parameters.AddWithValue("@TariffId", (object)tuition.TariffId ?? DBNull.Value);
-                        cmd.Parameters.AddWithValue("@FullAmount", tuition.FullAmount);
-                        cmd.Parameters.AddWithValue("@Discount", tuition.Discount);
-
-                        return (int)cmd.ExecuteScalar();
+                        AddStudentParameters(cmd, student);
+                        studentId = (int)cmd.ExecuteScalar();
                     }
+
+                    // Синхронизация с StudentTuitions
+                    SyncStudentTuition(conn, studentId, student.TuitionAmount, student.DiscountAmount, student.TariffId);
+
+                    LogInfo($"Студент {student.LastName} {student.FirstName} успешно сохранен (ID: {studentId})");
+                    return studentId;
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения стоимости обучения: {ex.Message}");
-                throw new Exception($"Ошибка сохранения стоимости обучения: {ex.Message}");
+                LogError($"Ошибка сохранения студента {student.LastName} {student.FirstName}", ex);
+                throw new Exception($"Ошибка сохранения студента: {ex.Message}");
             }
         }
-
-
 
         /// <summary>
         /// Получение статистики по задолженностям
@@ -2974,12 +3002,13 @@ namespace DrivingSchool.Services
                             }
                         }
 
-                        // Создаем бронирование
+                        // Создаем бронирование — ПАРАМЕТРЫ ДОБАВЛЯЕМ ДО ВЫПОЛНЕНИЯ
                         var insertCmd = new SqlCommand(@"
                     INSERT INTO DrivingLessons (StudentId, InstructorId, CarId, SlotId, LessonDate, StartTime, EndTime, Status, CreatedAt)
-                    OUTPUT INSERTED.Id
-                    VALUES (@StudentId, @InstructorId, @CarId, @SlotId, @LessonDate, @StartTime, @EndTime, 'Booked', GETDATE())", conn, transaction);
+                    VALUES (@StudentId, @InstructorId, @CarId, @SlotId, @LessonDate, @StartTime, @EndTime, 'Booked', GETDATE());
+                    SELECT SCOPE_IDENTITY();", conn, transaction);
 
+                        // ПАРАМЕТРЫ ДОБАВЛЯЕМ ЗДЕСЬ (ДО ExecuteScalar)
                         insertCmd.Parameters.AddWithValue("@StudentId", studentId);
                         insertCmd.Parameters.AddWithValue("@InstructorId", instructorId);
                         insertCmd.Parameters.AddWithValue("@CarId", carId);
@@ -2988,7 +3017,8 @@ namespace DrivingSchool.Services
                         insertCmd.Parameters.AddWithValue("@StartTime", startTime);
                         insertCmd.Parameters.AddWithValue("@EndTime", endTime);
 
-                        int lessonId = (int)insertCmd.ExecuteScalar();
+                        // ТЕПЕРЬ выполняем
+                        int lessonId = Convert.ToInt32(insertCmd.ExecuteScalar());
 
                         // Закрываем слот
                         var updateSlotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 0 WHERE Id = @SlotId", conn, transaction);
@@ -3064,6 +3094,9 @@ namespace DrivingSchool.Services
         /// <summary>
         /// Отмена урока
         /// </summary>
+        /// <summary>
+        /// Отмена урока (с проверкой на штраф за менее чем 24 часа)
+        /// </summary>
         public string CancelLesson(int lessonId, DateTime cancelTime)
         {
             using (var conn = GetConnection())
@@ -3078,23 +3111,23 @@ namespace DrivingSchool.Services
 
                 DateTime lessonDate;
                 TimeSpan startTime;
-                int instructorId, carId;
-                int? slotId;  // ✅ ИСПРАВЛЕНО: nullable int объявлен отдельно
+                int studentId = 0, instructorId = 0, carId = 0;
+                int? slotId = null;
 
                 using (var reader = cmd.ExecuteReader())
                 {
                     if (!reader.Read()) return "Урок не найден";
                     lessonDate = reader.GetDateTime(0);
                     startTime = TimeSpan.Parse(reader[1].ToString());
-                    instructorId = reader.GetInt32(2);
-                    carId = reader.GetInt32(3);
-                    slotId = reader.IsDBNull(4) ? null : (int?)reader.GetInt32(4);
+                    studentId = reader.GetInt32(2);      // ← Получаем StudentId
+                    instructorId = reader.GetInt32(3);   // ← Получаем InstructorId
+                    carId = reader.GetInt32(4);
+                    slotId = reader.IsDBNull(5) ? null : (int?)reader.GetInt32(5);
                 }
 
                 // Проверяем, можно ли отменить без штрафа (за 24 часа)
                 var lessonDateTime = lessonDate + startTime;
                 var hoursBefore = (lessonDateTime - cancelTime).TotalHours;
-
                 bool isWithin24Hours = hoursBefore <= 24;
 
                 if (isWithin24Hours)
@@ -3129,12 +3162,12 @@ namespace DrivingSchool.Services
                     updateCmd.Parameters.AddWithValue("@CancelTime", cancelTime);
                     updateCmd.ExecuteNonQuery();
 
-                    // Обновляем счетчик пропусков у студента
+                    // ✅ ИСПРАВЛЕНО: используем правильный studentId
                     var studentCmd = new SqlCommand(@"
                 UPDATE Students 
                 SET MissedLessons = ISNULL(MissedLessons, 0) + 1
                 WHERE Id = @StudentId", conn);
-                    studentCmd.Parameters.AddWithValue("@StudentId", instructorId);  // ✅ ИСПРАВЛЕНО: используем instructorId из reader
+                    studentCmd.Parameters.AddWithValue("@StudentId", studentId);  // ← Теперь правильно!
                     studentCmd.ExecuteNonQuery();
 
                     return "Урок засчитан как пропущенный (отмена менее чем за 24 часа)";
@@ -4442,6 +4475,176 @@ WHERE InstructorId = @InstructorId
         {
             return _connectionString;
         }
+
+        /// <summary>
+        /// Средний перерыв между занятиями (дней)
+        /// </summary>
+        public async Task<double> GetAvgGapDaysAsync(int studentId)
+        {
+            using (var conn = GetConnection())
+            {
+                await conn.OpenAsync();
+                var cmd = new SqlCommand(@"
+            SELECT ISNULL(AVG(DATEDIFF(DAY, PrevLesson, LessonDate)), 0)
+            FROM (
+                SELECT LessonDate,
+                       LAG(LessonDate) OVER (ORDER BY LessonDate) AS PrevLesson
+                FROM DrivingLessons
+                WHERE StudentId = @StudentId AND Status = 'Completed'
+            ) t
+            WHERE PrevLesson IS NOT NULL", conn);
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+                var result = await cmd.ExecuteScalarAsync();
+                return result != DBNull.Value ? Convert.ToDouble(result) : 0;
+            }
+        }
+
+        /// <summary>
+        /// Максимальный перерыв между занятиями (дней)
+        /// </summary>
+        public async Task<int> GetMaxGapDaysAsync(int studentId)
+        {
+            using (var conn = GetConnection())
+            {
+                await conn.OpenAsync();
+                var cmd = new SqlCommand(@"
+            SELECT ISNULL(MAX(DATEDIFF(DAY, PrevLesson, LessonDate)), 0)
+            FROM (
+                SELECT LessonDate,
+                       LAG(LessonDate) OVER (ORDER BY LessonDate) AS PrevLesson
+                FROM DrivingLessons
+                WHERE StudentId = @StudentId AND Status = 'Completed'
+            ) t
+            WHERE PrevLesson IS NOT NULL", conn);
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+                var result = await cmd.ExecuteScalarAsync();
+                return result != DBNull.Value ? Convert.ToInt32(result) : 0;
+            }
+        }
+
+        /// <summary>
+        /// Перерыв между последним и предпоследним занятием (дней)
+        /// </summary>
+        public async Task<int> GetLastGapDaysAsync(int studentId)
+        {
+            using (var conn = GetConnection())
+            {
+                await conn.OpenAsync();
+
+                // Получаем последние две даты
+                var cmd = new SqlCommand(@"
+            SELECT TOP 2 LessonDate
+            FROM DrivingLessons
+            WHERE StudentId = @StudentId AND Status = 'Completed'
+            ORDER BY LessonDate DESC", conn);
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                var dates = new List<DateTime>();
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        dates.Add(reader.GetDateTime(0));
+                    }
+                }
+
+                if (dates.Count >= 2)
+                {
+                    return (dates[0] - dates[1]).Days;
+                }
+                return 0;
+            }
+        }
+
+         #region Вспомогательные методы
+
+/// <summary>
+/// Валидация номера телефона
+/// </summary>
+private bool IsValidPhone(string phone)
+        {
+            if (string.IsNullOrWhiteSpace(phone))
+                return false;
+
+            // Удаляем все нецифровые символы для проверки
+            string digitsOnly = new string(phone.Where(c => char.IsDigit(c)).ToArray());
+
+            // Проверяем длину (10-11 цифр для России)
+            return digitsOnly.Length >= 10 && digitsOnly.Length <= 11;
+        }
+
+        /// <summary>
+        /// Валидация email
+        /// </summary>
+        private bool IsValidEmail(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return true; // Email может быть пустым
+
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Логирование ошибок в файл
+        /// </summary>
+        private void LogError(string message, Exception ex = null)
+        {
+            try
+            {
+                string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "error.log");
+                string directory = Path.GetDirectoryName(logPath);
+                if (!Directory.Exists(directory))
+                    Directory.CreateDirectory(directory);
+
+                string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ERROR - {message}";
+                if (ex != null)
+                    logEntry += $"\nException: {ex.Message}\nStack Trace: {ex.StackTrace}\n";
+
+                File.AppendAllText(logPath, logEntry + "\n");
+
+                // Также пишем в Debug для разработки
+                System.Diagnostics.Debug.WriteLine(logEntry);
+            }
+            catch
+            {
+                // Если не можем записать в лог, хотя бы в Debug
+                System.Diagnostics.Debug.WriteLine($"Ошибка логирования: {message}");
+            }
+        }
+
+        /// <summary>
+        /// Логирование информационных сообщений
+        /// </summary>
+        private void LogInfo(string message)
+        {
+            try
+            {
+                string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "info.log");
+                string directory = Path.GetDirectoryName(logPath);
+                if (!Directory.Exists(directory))
+                    Directory.CreateDirectory(directory);
+
+                string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - INFO - {message}";
+                File.AppendAllText(logPath, logEntry + "\n");
+                System.Diagnostics.Debug.WriteLine(logEntry);
+            }
+            catch
+            {
+                System.Diagnostics.Debug.WriteLine($"INFO: {message}");
+            }
+        }
+
+        #endregion
+
+        
     } // <-- Закрывающая скобка класса SqlDataService (СТРОКА 2559)
 
     public class DebtInfo
@@ -4529,4 +4732,6 @@ WHERE InstructorId = @InstructorId
         public string PaidAmountFormatted => $"{PaidAmount:N2} руб.";
         public string DebtAmountFormatted => $"{DebtAmount:N2} руб.";
     }
+
+
 } // <-- Закрывающая скобка namespace

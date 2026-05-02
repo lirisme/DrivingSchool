@@ -4,7 +4,8 @@
         Title="Автошкола - Элита Авто" 
         Height="600" 
         Width="900"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -19,7 +20,7 @@
                 <MenuItem Header="Выход" Click="Exit_Click"/>
             </MenuItem>
 
-            <MenuItem Header="Справочники">
+            <MenuItem Header="Справочники" x:Name="ReferencesMenu">
                 <MenuItem Header="Учащиеся" Click="Students_Click"/>
                 <MenuItem Header="Сотрудники" Click="Employees_Click"/>
                 <MenuItem Header="Автомобили" Click="Cars_Click"/>
@@ -28,7 +29,7 @@
                 <MenuItem Header="Тарифы" Click="Tariffs_Click"/>
             </MenuItem>
 
-            <MenuItem Header="Документы учащихся">
+            <MenuItem Header="Документы учащихся" x:Name="DocumentsMenu">
                 <MenuItem Header="Паспортные данные" Click="PassportData_Click"/>
                 <MenuItem Header="СНИЛС" Click="SNILSData_Click"/>
                 <MenuItem Header="Медицинские справки" Click="MedicalData_Click"/>
@@ -37,25 +38,35 @@
                 <MenuItem Header="Водительские удостоверения" Click="DrivingLicenseData_Click"/>
             </MenuItem>
 
-            <MenuItem Header="Финансы">
+            <MenuItem Header="Финансы" x:Name="FinanceMenu">
                 <MenuItem Header="Платежи" Click="Payments_Click"/>
                 <MenuItem Header="Финансовые отчеты" Click="FinancialReports_Click"/>
             </MenuItem>
 
-            <MenuItem Header="Вождение">
+            <MenuItem Header="Вождение" x:Name="DrivingMenu">
                 <MenuItem Header="Бронирование уроков" Click="DrivingLessons_Click"/>
             </MenuItem>
 
-            <MenuItem Header="Экзамены">
+            <MenuItem Header="Экзамены" x:Name="ExamMenu">
                 <MenuItem Header="Проведение экзаменов" Click="OpenExamManagement_Click"/>
             </MenuItem>
 
-            <MenuItem Header="Отчеты">
+            <MenuItem Header="Отчеты" x:Name="ReportsMenu">
                 <MenuItem Header="Отчеты по учащимся" Click="StudentReports_Click"/>
             </MenuItem>
 
-            <MenuItem Header="Документы">
+            <MenuItem Header="Документы" x:Name="DocsMenu">
                 <MenuItem Header="Шаблоны документов" Click="Templates_Click"/>
+            </MenuItem>
+
+            <MenuItem Header="Сервис" x:Name="ServiceMenu">
+                <MenuItem Header="Создать резервную копию" Click="CreateBackup_Click"/>
+                <MenuItem Header="Восстановить из копии" Click="RestoreBackup_Click"/>
+                <MenuItem Header="Открыть папку с бэкапами" Click="OpenBackupFolder_Click"/>
+            </MenuItem>
+
+            <MenuItem Header="Администрирование" x:Name="AdminMenu" Visibility="Collapsed">
+                <MenuItem Header="Создать пользователя" Click="CreateUser_Click"/>
             </MenuItem>
 
             <MenuItem Header="Помощь">

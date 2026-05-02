@@ -1,17 +1,22 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
+﻿using System.Windows;
+using DrivingSchool.Models;
+using DrivingSchool.Views;
 
 namespace DrivingSchool
 {
-    /// <summary>
-    /// Логика взаимодействия для App.xaml
-    /// </summary>
     public partial class App : Application
     {
+        public static User CurrentUser { get; set; }
+        public static int CurrentUserId { get; set; }
+        public static string CurrentUserRole { get; set; }
+        public static string CurrentUserName { get; set; }
+
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+
+            var loginWindow = new LoginWindow();
+            loginWindow.Show();
+        }
     }
 }

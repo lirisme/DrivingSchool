@@ -1,10 +1,11 @@
-﻿using System;
+﻿using DrivingSchool.Models;
+using DrivingSchool.Services;
+using Microsoft.Win32;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using DrivingSchool.Models;
-using DrivingSchool.Services;
-using System.Collections.Generic;
 
 namespace DrivingSchool.Views
 {
@@ -14,11 +15,13 @@ namespace DrivingSchool.Views
         private StudyGroupCollection _groups;
         private StudentCollection _students;
         private StudyGroup _selectedGroup;
+        private readonly ReportService _reportService;
 
         public GroupsPage(SqlDataService dataService)
         {
             InitializeComponent();
             _dataService = dataService;
+            _reportService = new ReportService(dataService);  // добавь эту строку
             LoadData();
         }
 
@@ -91,6 +94,7 @@ namespace DrivingSchool.Views
             RemoveStudentButton.IsEnabled = singleSelected;
             MoveStudentButton.IsEnabled = singleSelected;
             MergeGroupsButton.IsEnabled = multipleSelected; // Активируем при выборе 2+ групп
+            ExportGroupButton.IsEnabled = singleSelected;
 
             if (singleSelected)
             {
@@ -833,7 +837,30 @@ namespace DrivingSchool.Views
                 EditGroup_Click(sender, e);
             }
         }
+
+
+        private void ExportGroupButton_Click(object sender, RoutedEventArgs e)
+        {
+        var group = GroupsGrid.SelectedItem as StudyGroup;
+        if (group == null)
+        {
+            MessageBox.Show("Выберите группу для экспорта", "Ошибка");
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            FileName = $"Group_{group.Name}_{DateTime.Now:dd_MM_yyyy}.xls",
+            Filter = "Excel Files|*.xls",
+            DefaultExt = "xls"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            _reportService.ExportGroupStudentsToExcel(group.Id, dialog.FileName);
+        }
     }
+}
 
     // Вспомогательный класс для выбора студентов
     public class StudentSelectionItem

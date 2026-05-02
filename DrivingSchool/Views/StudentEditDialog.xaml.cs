@@ -14,8 +14,8 @@ namespace DrivingSchool.Views
         private readonly SqlDataService _dataService;
         private TariffCollection _tariffs;
         public Student StudentData { get; private set; }
+        private bool _isDirty = false; // Флаг наличия несохраненных изменений
 
-        // Добавьте это событие
         public event EventHandler<StudentSavedEventArgs> StudentSaved;
 
         public StudentEditDialog(SqlDataService dataService, Student studentData = null)
@@ -48,15 +48,81 @@ namespace DrivingSchool.Views
             LoadInstructors();
             LoadCars();
 
-            // Подписываемся на событие выбора категории
             CategoryComboBox.SelectionChanged += CategoryComboBox_SelectionChanged;
-            // Подписываемся на событие выбора тарифа для обновления стоимости
             TariffComboBox.SelectionChanged += TariffComboBox_SelectionChanged;
-
             BirthDatePicker.SelectedDateChanged += BirthDateChanged;
 
-            // Обновляем отображение итоговой суммы
             UpdateFinalAmount();
+
+            // Подписываемся на изменения во всех полях
+            SubscribeToChanges();
+        }
+
+        // Подписка на изменения во всех полях
+        private void SubscribeToChanges()
+        {
+            // Текстовые поля
+            LastNameTextBox.TextChanged += (s, e) => _isDirty = true;
+            FirstNameTextBox.TextChanged += (s, e) => _isDirty = true;
+            MiddleNameTextBox.TextChanged += (s, e) => _isDirty = true;
+            BirthPlaceTextBox.TextChanged += (s, e) => _isDirty = true;
+            PhoneTextBox.TextChanged += (s, e) => _isDirty = true;
+            EmailTextBox.TextChanged += (s, e) => _isDirty = true;
+            CitizenshipTextBox.TextChanged += (s, e) => _isDirty = true;
+            TuitionTextBox.TextChanged += (s, e) => _isDirty = true;
+            DiscountTextBox.TextChanged += (s, e) => _isDirty = true;
+
+            // ComboBox
+            GroupComboBox.SelectionChanged += (s, e) => _isDirty = true;
+            CategoryComboBox.SelectionChanged += (s, e) => _isDirty = true;
+            TariffComboBox.SelectionChanged += (s, e) => _isDirty = true;
+            InstructorComboBox.SelectionChanged += (s, e) => _isDirty = true;
+            CarComboBox.SelectionChanged += (s, e) => _isDirty = true;
+            GenderComboBox.SelectionChanged += (s, e) => _isDirty = true;
+
+            // DatePicker
+            BirthDatePicker.SelectedDateChanged += (s, e) => _isDirty = true;
+        }
+
+        // Обработка закрытия окна
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (_isDirty)
+            {
+                var result = MessageBox.Show(
+                    "Есть несохраненные изменения. Сохранить перед закрытием?",
+                    "Подтверждение закрытия",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    // Сохраняем
+                    if (SaveStudent())
+                    {
+                        DialogResult = true;
+                        base.OnClosing(e);
+                    }
+                    else
+                    {
+                        e.Cancel = true; // Не закрываем, если ошибка сохранения
+                    }
+                }
+                else if (result == MessageBoxResult.No)
+                {
+                    // Закрываем без сохранения
+                    DialogResult = false;
+                    base.OnClosing(e);
+                }
+                else // Cancel
+                {
+                    e.Cancel = true; // Не закрываем
+                }
+            }
+            else
+            {
+                base.OnClosing(e);
+            }
         }
 
         private void LoadGroups()
@@ -121,7 +187,6 @@ namespace DrivingSchool.Views
                 _tariffs = _dataService.LoadTariffs();
                 var tariffsList = _tariffs.Tariffs.ToList();
 
-                // Добавляем пустой тариф для возможности выбора "Без тарифа"
                 tariffsList.Insert(0, new Tariff
                 {
                     Id = 0,
@@ -136,7 +201,6 @@ namespace DrivingSchool.Views
 
                 if (StudentData.TariffId > 0)
                 {
-                    // Ищем тариф с таким ID
                     var selectedTariff = tariffsList.FirstOrDefault(t => t.Id == StudentData.TariffId);
                     if (selectedTariff != null)
                     {
@@ -155,43 +219,47 @@ namespace DrivingSchool.Views
         {
             if (CategoryComboBox.SelectedItem is VehicleCategory selectedCategory && _tariffs != null)
             {
-                // Фильтруем тарифы по выбранной категории
-                var filteredTariffs = _tariffs.Tariffs
-                    .Where(t => t.Category == selectedCategory.Code || string.IsNullOrEmpty(t.Category))
-                    .ToList();
+                TariffComboBox.SelectionChanged -= TariffComboBox_SelectionChanged;
 
-                // Добавляем "Без тарифа" в начало
-                filteredTariffs.Insert(0, new Tariff
+                try
                 {
-                    Id = 0,
-                    Name = "Без тарифа",
-                    BaseCost = 0,
-                    Category = ""
-                });
+                    var filteredTariffs = _tariffs.Tariffs
+                        .Where(t => t.Category == selectedCategory.Code || string.IsNullOrEmpty(t.Category))
+                        .ToList();
 
-                // Сохраняем текущее выделение
-                var currentTariffId = StudentData.TariffId;
-
-                TariffComboBox.ItemsSource = filteredTariffs;
-
-                // Пытаемся восстановить выделение, если подходит
-                if (currentTariffId > 0)
-                {
-                    var exists = filteredTariffs.Any(t => t.Id == currentTariffId);
-                    if (exists)
+                    filteredTariffs.Insert(0, new Tariff
                     {
-                        TariffComboBox.SelectedValue = currentTariffId;
+                        Id = 0,
+                        Name = "Без тарифа",
+                        BaseCost = 0,
+                        Category = ""
+                    });
+
+                    var currentTariffId = StudentData.TariffId;
+
+                    TariffComboBox.ItemsSource = filteredTariffs;
+
+                    if (currentTariffId.HasValue && currentTariffId.Value > 0)
+                    {
+                        var exists = filteredTariffs.Any(t => t.Id == currentTariffId.Value);
+                        if (exists)
+                        {
+                            TariffComboBox.SelectedValue = currentTariffId.Value;
+                        }
+                        else
+                        {
+                            StudentData.TariffId = null;
+                            TariffComboBox.SelectedIndex = 0;
+                        }
                     }
                     else
                     {
-                        // Если текущий тариф не подходит под категорию, сбрасываем
-                        StudentData.TariffId = null;
                         TariffComboBox.SelectedIndex = 0;
                     }
                 }
-                else
+                finally
                 {
-                    TariffComboBox.SelectedIndex = 0;
+                    TariffComboBox.SelectionChanged += TariffComboBox_SelectionChanged;
                 }
             }
         }
@@ -202,18 +270,13 @@ namespace DrivingSchool.Views
             {
                 if (selectedTariff.Id > 0)
                 {
-                    // Автоматически подставляем стоимость из тарифа
                     StudentData.TuitionAmount = selectedTariff.BaseCost;
                     StudentData.TariffId = selectedTariff.Id;
-
-                    // Используем инвариантную культуру для форматирования
                     TuitionTextBox.Text = selectedTariff.BaseCost.ToString("F2", CultureInfo.InvariantCulture);
                 }
                 else
                 {
-                    // Если выбран "Без тарифа"
                     StudentData.TariffId = null;
-                    // Не сбрасываем стоимость, чтобы можно было ввести вручную
                 }
 
                 UpdateFinalAmount();
@@ -237,7 +300,6 @@ namespace DrivingSchool.Views
                 decimal tuition = 0;
                 decimal discount = 0;
 
-                // Явно указываем культуру для парсинга
                 if (!string.IsNullOrEmpty(TuitionTextBox?.Text))
                     decimal.TryParse(TuitionTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out tuition);
 
@@ -339,12 +401,11 @@ namespace DrivingSchool.Views
 
         private void BirthDateChanged(object sender, SelectionChangedEventArgs e)
         {
-            // Обновляем возраст
             var binding = AgeTextBox?.GetBindingExpression(TextBox.TextProperty);
             binding?.UpdateTarget();
         }
 
-        private void SaveButton_Click(object sender, RoutedEventArgs e)
+        private bool ValidateStudent()
         {
             // Проверка обязательных полей
             if (string.IsNullOrWhiteSpace(StudentData.LastName))
@@ -352,7 +413,7 @@ namespace DrivingSchool.Views
                 MessageBox.Show("Введите фамилию учащегося", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 LastNameTextBox.Focus();
-                return;
+                return false;
             }
 
             if (string.IsNullOrWhiteSpace(StudentData.FirstName))
@@ -360,63 +421,115 @@ namespace DrivingSchool.Views
                 MessageBox.Show("Введите имя учащегося", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 FirstNameTextBox.Focus();
-                return;
+                return false;
             }
 
-            if (string.IsNullOrWhiteSpace(StudentData.Phone))
+            // Валидация телефона
+            string digitsOnly = new string(StudentData.Phone.Where(char.IsDigit).ToArray());
+
+            if (digitsOnly.StartsWith("7") || digitsOnly.StartsWith("8"))
+                digitsOnly = digitsOnly.Substring(1);
+
+            if (digitsOnly.Length != 10 && !string.IsNullOrEmpty(StudentData.Phone))
             {
-                MessageBox.Show("Введите телефон учащегося", "Ошибка",
+                MessageBox.Show("Введите корректный номер телефона (10 цифр)", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 PhoneTextBox.Focus();
-                return;
+                return false;
             }
 
+            // Валидация email
+            if (!string.IsNullOrEmpty(StudentData.Email))
+            {
+                try
+                {
+                    var addr = new System.Net.Mail.MailAddress(StudentData.Email);
+                    if (addr.Address != StudentData.Email)
+                        throw new Exception();
+                }
+                catch
+                {
+                    MessageBox.Show("Введите корректный email адрес", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    EmailTextBox.Focus();
+                    return false;
+                }
+            }
+
+            // Проверка возраста
             if (StudentData.BirthDate > DateTime.Now.AddYears(-16))
             {
                 MessageBox.Show("Учащийся должен быть старше 16 лет", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 BirthDatePicker.Focus();
-                return;
+                return false;
             }
 
+            // Проверка выбора категории
             if (StudentData.VehicleCategoryId == 0)
             {
                 MessageBox.Show("Выберите категорию транспортного средства", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 CategoryComboBox.Focus();
-                return;
+                return false;
             }
 
-            // Обновляем значения из текстовых полей с использованием инвариантной культуры
+            // Обновляем значения из текстовых полей
             if (!string.IsNullOrEmpty(TuitionTextBox?.Text))
             {
-                if (decimal.TryParse(TuitionTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal tuition))
-                {
-                    StudentData.TuitionAmount = tuition;
-                }
-                else
+                if (!decimal.TryParse(TuitionTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal tuition))
                 {
                     MessageBox.Show("Некорректный формат суммы обучения", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     TuitionTextBox.Focus();
-                    return;
+                    return false;
                 }
+                StudentData.TuitionAmount = tuition;
             }
 
             if (!string.IsNullOrEmpty(DiscountTextBox?.Text))
             {
-                if (decimal.TryParse(DiscountTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal discount))
-                {
-                    StudentData.DiscountAmount = discount;
-                }
-                else
+                if (!decimal.TryParse(DiscountTextBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal discount))
                 {
                     MessageBox.Show("Некорректный формат суммы скидки", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     DiscountTextBox.Focus();
-                    return;
+                    return false;
                 }
+                StudentData.DiscountAmount = discount;
             }
+
+            return true;
+        }
+
+        private bool SaveStudent()
+        {
+            try
+            {
+                int savedId = _dataService.SaveStudent(StudentData);
+                StudentData.Id = savedId;
+
+                StudentSaved?.Invoke(this, new StudentSavedEventArgs
+                {
+                    StudentId = savedId,
+                    StudentName = StudentData.FullName
+                });
+
+                _isDirty = false; // Сбрасываем флаг после успешного сохранения
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при сохранении: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        private void SaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!ValidateStudent())
+                return;
 
             // Проверка, что скидка не превышает стоимость
             if (StudentData.DiscountAmount > StudentData.TuitionAmount)
@@ -430,34 +543,277 @@ namespace DrivingSchool.Views
                 }
             }
 
-            try
+            if (SaveStudent())
             {
-                int savedId = _dataService.SaveStudent(StudentData);
+                // Используем существующий метод HasPayments
+                bool hasPayments = _dataService.HasPayments(StudentData.Id);
 
-                // Вызываем событие после сохранения
-                StudentSaved?.Invoke(this, new StudentSavedEventArgs
+                // Если платежей нет - предлагаем внести первый платеж
+                if (!hasPayments)
                 {
-                    StudentId = savedId,
-                    StudentName = StudentData.FullName
-                });
+                    MessageBoxResult result = MessageBox.Show(
+                        "Необходимо внести первый платеж. Перейти к оплате?",
+                        "Первый платеж",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        var paymentDialog = new PaymentEditDialog(_dataService, StudentData.Id, StudentData.FullName);
+                        paymentDialog.Owner = this;
+                        paymentDialog.ShowDialog();
+                    }
+                }
 
                 DialogResult = true;
                 Close();
             }
-            catch (Exception ex)
+        }
+
+        // Обработка нажатия Enter для сохранения
+        private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
             {
-                MessageBox.Show($"Ошибка при сохранении: {ex.Message}", "Ошибка",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                SaveButton_Click(sender, e);
+                e.Handled = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Escape)
+            {
+                CancelButton_Click(sender, e);
+                e.Handled = true;
+            }
+        }
+
+        // ==================== PHONE MASK ====================
+
+        private string GetDigits(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "";
+
+            var digits = new string(text.Where(char.IsDigit).ToArray());
+
+            if (digits.Length >= 1 && (digits[0] == '7' || digits[0] == '8'))
+                digits = digits.Substring(1);
+
+            return digits;
+        }
+
+        private string FormatPhone(string digits)
+        {
+            if (string.IsNullOrEmpty(digits))
+                return "";
+
+            if (digits.Length > 10)
+                digits = digits.Substring(0, 10);
+
+            try
+            {
+                if (digits.Length == 0)
+                    return "";
+
+                if (digits.Length <= 3)
+                    return $"+7 ({digits}";
+
+                if (digits.Length <= 6)
+                    return $"+7 ({digits.Substring(0, 3)}) {digits.Substring(3)}";
+
+                if (digits.Length <= 8)
+                    return $"+7 ({digits.Substring(0, 3)}) {digits.Substring(3, 3)}-{digits.Substring(6)}";
+
+                return $"+7 ({digits.Substring(0, 3)}) {digits.Substring(3, 3)}-{digits.Substring(6, 2)}-{digits.Substring(8, 2)}";
+            }
+            catch
+            {
+                return "+7 (" + digits;
+            }
+        }
+
+        private int GetCaretPosition(string text, int digitIndex)
+        {
+            if (string.IsNullOrEmpty(text) || digitIndex <= 0)
+                return 4;
+
+            int digitCount = 0;
+
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (char.IsDigit(text[i]))
+                {
+                    digitCount++;
+                    if (digitCount == digitIndex)
+                    {
+                        if (i + 1 <= text.Length)
+                            return i + 1;
+                        else
+                            return text.Length;
+                    }
+                }
+            }
+
+            return text.Length;
+        }
+
+        private void PhoneTextBox_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        {
+            if (!char.IsDigit(e.Text, 0))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            var tb = sender as TextBox;
+            if (tb == null) return;
+
+            string currentText = tb.Text ?? "";
+            string digits = GetDigits(currentText);
+            int caret = tb.CaretIndex;
+
+            if (caret < 0) caret = 0;
+            if (caret > currentText.Length) caret = currentText.Length;
+
+            int digitsBefore = currentText.Take(caret).Count(char.IsDigit);
+
+            if (digitsBefore < 0) digitsBefore = 0;
+            if (digitsBefore > digits.Length) digitsBefore = digits.Length;
+
+            digits = digits.Insert(digitsBefore, e.Text);
+
+            if (digits.Length > 10)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            string formatted = FormatPhone(digits);
+            tb.Text = formatted;
+
+            int newCaretPos = GetCaretPosition(formatted, digitsBefore + 1);
+            if (newCaretPos >= 0 && newCaretPos <= formatted.Length)
+                tb.CaretIndex = newCaretPos;
+
+            StudentData.Phone = formatted;
+
+            e.Handled = true;
+        }
+
+        private void PhoneTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            var tb = sender as TextBox;
+            if (tb == null) return;
+
+            string currentText = tb.Text ?? "";
+            string digits = GetDigits(currentText);
+            int caret = tb.CaretIndex;
+
+            if (caret < 0) caret = 0;
+            if (caret > currentText.Length) caret = currentText.Length;
+
+            int digitsBefore = currentText.Take(caret).Count(char.IsDigit);
+
+            if (digitsBefore < 0) digitsBefore = 0;
+            if (digitsBefore > digits.Length) digitsBefore = digits.Length;
+
+            if (e.Key == System.Windows.Input.Key.Back)
+            {
+                if (digitsBefore > 0 && digits.Length > 0 && digitsBefore - 1 < digits.Length)
+                {
+                    digits = digits.Remove(digitsBefore - 1, 1);
+                    UpdatePhone(tb, digits, digitsBefore - 1);
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Delete)
+            {
+                if (digitsBefore < digits.Length)
+                {
+                    digits = digits.Remove(digitsBefore, 1);
+                    UpdatePhone(tb, digits, digitsBefore);
+                }
+                e.Handled = true;
+            }
+        }
+
+        private void UpdatePhone(TextBox tb, string digits, int digitIndex)
+        {
+            string formatted = FormatPhone(digits);
+            tb.Text = formatted;
+
+            int newCaretPos = GetCaretPosition(formatted, digitIndex);
+            if (newCaretPos >= 0 && newCaretPos <= formatted.Length)
+                tb.CaretIndex = newCaretPos;
+
+            StudentData.Phone = formatted;
+        }
+
+        private void PhoneTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
+        {
+            if (!e.DataObject.GetDataPresent(typeof(string)))
+                return;
+
+            var text = (string)e.DataObject.GetData(typeof(string));
+            if (string.IsNullOrEmpty(text)) return;
+
+            var digits = new string(text.Where(char.IsDigit).ToArray());
+
+            if (digits.Length >= 1 && (digits[0] == '7' || digits[0] == '8'))
+                digits = digits.Substring(1);
+
+            if (digits.Length > 10)
+                digits = digits.Substring(0, 10);
+
+            var tb = sender as TextBox;
+            if (tb == null) return;
+
+            string formatted = FormatPhone(digits);
+            tb.Text = formatted;
+            tb.CaretIndex = tb.Text.Length;
+
+            StudentData.Phone = formatted;
+
+            e.CancelCommand();
+        }
+
+        private void PhoneTextBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            var tb = sender as TextBox;
+            if (tb == null) return;
+
+            // Показываем только цифры при фокусе для удобства редактирования
+            string digits = GetDigits(tb.Text);
+            if (!string.IsNullOrEmpty(digits))
+            {
+                tb.Text = digits;
+                tb.CaretIndex = tb.Text.Length;
+            }
+            else
+            {
+                tb.Text = "";
             }
         }
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_isDirty)
+            {
+                var result = MessageBox.Show(
+                    "Есть несохраненные изменения. Закрыть без сохранения?",
+                    "Подтверждение закрытия",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.No)
+                {
+                    return;
+                }
+            }
+
             DialogResult = false;
             Close();
         }
     }
-    // Класс для аргументов события
+
     public class StudentSavedEventArgs : EventArgs
     {
         public int StudentId { get; set; }

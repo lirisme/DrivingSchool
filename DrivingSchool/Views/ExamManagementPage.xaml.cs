@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using DrivingSchool.Models;
 using DrivingSchool.Services;
+using DrivingSchool.AI;  // <-- ДОБАВЛЕНО
 
 namespace DrivingSchool.Views
 {
@@ -14,6 +15,7 @@ namespace DrivingSchool.Views
     {
         private readonly SqlDataService _dataService;
         private readonly ExamService _examService;
+        private AIClient _aiClient;  // <-- ДОБАВЛЕНО
         private List<ExamSchedule> _allActiveSchedules;
         private List<ExamSchedule> _allPastSchedules;
         private List<StudentExamSummary> _allStudents;
@@ -24,6 +26,7 @@ namespace DrivingSchool.Views
             InitializeComponent();
             _dataService = dataService;
             _examService = new ExamService(_dataService.GetConnectionString());
+            _aiClient = new AIClient();  // <-- ДОБАВЛЕНО
             Loaded += async (s, ev) => await LoadDataAsync();
         }
 
@@ -33,6 +36,9 @@ namespace DrivingSchool.Views
             await LoadStudentsAsync();
         }
 
+        /// <summary>
+        /// Загрузка расписания
+        /// </summary>
         private async Task LoadSchedulesAsync()
         {
             try
@@ -49,34 +55,21 @@ namespace DrivingSchool.Views
                 if (gibddTheory != null) allSchedules.AddRange(gibddTheory);
                 if (gibddPractice != null) allSchedules.AddRange(gibddPractice);
 
-                // Активные экзамены - дата сегодня или позже
+                // АКТИВНЫЕ: все НЕ проведенные экзамены
                 _allActiveSchedules = allSchedules
-                    .Where(s => s.ExamDate.Date >= DateTime.Today)
+                    .Where(s => !s.IsConducted)
                     .OrderBy(s => s.ExamDate).ThenBy(s => s.StartTime)
                     .ToList();
 
-                // Проведенные экзамены - дата вчера или раньше
+                // ПРОВЕДЕННЫЕ: только IsConducted = true
                 _allPastSchedules = allSchedules
-                    .Where(s => s.ExamDate.Date < DateTime.Today)
+                    .Where(s => s.IsConducted)
                     .OrderByDescending(s => s.ExamDate).ThenBy(s => s.StartTime)
                     .ToList();
 
-                // Устанавливаем источник данных
                 SchedulesGrid.ItemsSource = _allActiveSchedules;
+                PastSchedulesGrid.ItemsSource = _allPastSchedules;
 
-                // Применяем фильтр к проведенным
-                var filtered = _allPastSchedules.AsEnumerable();
-                if (PastExamTypeFilter?.SelectedItem != null)
-                {
-                    var filterText = (PastExamTypeFilter.SelectedItem as ComboBoxItem)?.Content?.ToString();
-                    if (filterText == "Внутренние")
-                        filtered = filtered.Where(s => s.Type == ExamType.Internal);
-                    else if (filterText == "ГИБДД")
-                        filtered = filtered.Where(s => s.Type == ExamType.GIBDD);
-                }
-                PastSchedulesGrid.ItemsSource = filtered.ToList();
-
-                // Обновляем статус
                 if (ActiveStatusText != null)
                     ActiveStatusText.Text = $"Активных экзаменов: {_allActiveSchedules.Count}";
                 if (PastStatusText != null)
@@ -126,9 +119,40 @@ namespace DrivingSchool.Views
                 {
                     var examStatus = await _examService.GetStudentExamStatusAsync(student.Id);
 
-                    // Убираем await, так как метод возвращает int, а не Task
+
                     int totalLessons = _dataService.GetLessonsCountByCategory(student.Id);
-                    int completedLessons = student.CompletedLessons ?? 0;
+                    int completedLessons = (student.CompletedLessons ?? 0) + (student.MissedLessons ?? 0);                    // ========== ДАННЫЕ ДЛЯ ИИ ==========
+                    int maxGap = await _dataService.GetMaxGapDaysAsync(student.Id);
+                    double avgGap = await _dataService.GetAvgGapDaysAsync(student.Id);
+                    int lastGap = await _dataService.GetLastGapDaysAsync(student.Id);
+
+                    if (student.LastName.Contains("Корецк"))
+                    {
+                        System.Windows.MessageBox.Show($"maxGap: {maxGap}, avgGap: {avgGap}, lastGap: {lastGap}");
+                    } 
+
+                    var aiData = new StudentDataForAI
+                    {
+                        CompletedLessons = completedLessons,
+                        TotalRequiredLessons = totalLessons,
+                        MissedLessons = student.MissedLessons ?? 0,
+                        MaxGapDays = maxGap,
+                        AvgGapDays = avgGap,
+                        LastGapDays = lastGap,
+                        TheoryAttempts = 0,
+                        PracticeAttempts = 0
+                    };
+
+                    AIRecommendation aiRecommendation = null;
+                    try
+                    {
+                        aiRecommendation = await _aiClient.GetRecommendationAsync(aiData);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"AI Error: {ex.Message}");
+                    }
+                    // ===================================
 
                     var summary = new StudentExamSummary
                     {
@@ -140,12 +164,17 @@ namespace DrivingSchool.Views
                         Phone = student.Phone ?? "",
                         InternalTheoryPassed = examStatus.InternalTheoryPassed,
                         InternalPracticePassed = examStatus.InternalPracticePassed,
-                        OverallStatus = GetOverallStatus(examStatus, completedLessons, totalLessons)
+                        OverallStatus = GetOverallStatus(examStatus, completedLessons, totalLessons),
+
+                        // ========== ИИ ПОЛЯ ==========
+                        AIRecommendationText = aiRecommendation?.Recommendation ?? "Загрузка...",
+                        AIReadinessScore = aiRecommendation?.Score ?? 0,
+                        AIReadinessColor = aiRecommendation?.Score >= 80 ? "Green" :
+                                           (aiRecommendation?.Score >= 60 ? "Orange" : "Red")
                     };
                     _allStudents.Add(summary);
                 }
 
-                // Сортируем по количеству уроков (сверху те, у кого больше)
                 _allStudents = _allStudents.OrderByDescending(s => s.CompletedLessons).ToList();
                 StudentsGrid.ItemsSource = _allStudents;
             }
@@ -164,26 +193,10 @@ namespace DrivingSchool.Views
             if (status.InternalTheoryPassed && status.InternalPracticePassed)
                 return "✅ Готов к ГИБДД";
             if (completedLessons >= totalLessons)
-                return "🚗 Готов к практике";
-            if (completedLessons >= totalLessons / 2)
-                return "📚 Готов к теории";
+                return "🚗 Готов к внутреннему экзамену";
             return $"📖 В обучении ({completedLessons}/{totalLessons})";
         }
 
-        private string GetOverallStatus(StudentExamStatus status, int completedLessons)
-        {
-            if (status.GIBDDTheoryPassed && status.GIBDDPracticePassed)
-                return "🎓 Выпущен";
-            if (status.InternalTheoryPassed && status.InternalPracticePassed)
-                return "✅ Готов к ГИБДД";
-            if (completedLessons >= 28)
-                return "🚗 Готов к практике";
-            if (completedLessons >= 14)
-                return "📚 Готов к теории";
-            return $"📖 В обучении ({completedLessons}/28)";
-        }
-
-        // Поиск в реальном времени
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_allStudents == null) return;
@@ -229,6 +242,9 @@ namespace DrivingSchool.Views
             }
         }
 
+        /// <summary>
+        /// Запись студента на экзамен
+        /// </summary>
         private async void RegisterStudentBtn_Click(object sender, RoutedEventArgs args)
         {
             var button = sender as Button;
@@ -243,21 +259,6 @@ namespace DrivingSchool.Views
                 return;
             }
 
-            // Проверка даты экзамена
-            if (schedule.ExamDate < DateTime.Today)
-            {
-                var result = MessageBox.Show(
-                    $"Внимание! Дата экзамена {schedule.ExamDate:dd.MM.yyyy} уже прошла.\n\n" +
-                    $"Вы действительно хотите записать ученика {student.StudentName} на этот экзамен?",
-                    "Дата экзамена в прошлом",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-
-                if (result != MessageBoxResult.Yes)
-                    return;
-            }
-
-            // Проверка для ГИБДД
             if (schedule.Type == ExamType.GIBDD)
             {
                 if (!student.InternalTheoryPassed || !student.InternalPracticePassed)
@@ -277,25 +278,23 @@ namespace DrivingSchool.Views
             }
 
             var confirm = MessageBox.Show($"Записать {student.StudentName} на экзамен?\n" +
-                $"{schedule.ExamDate:dd.MM.yyyy} {schedule.StartTime:hh\\:mm}\n{schedule.Location}",
+                $"{schedule.ExamDate:dd.MM.yyyy}",
                 "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (confirm != MessageBoxResult.Yes) return;
 
             try
             {
-                var success = await _examService.RegisterForExamAsync(student.StudentId, schedule.Id);
+                var (success, message) = await _examService.RegisterForExamAsync(student.StudentId, schedule.Id);
                 if (success)
                 {
-                    MessageBox.Show("Ученик успешно записан!", "Успех",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show(message, "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     await LoadSchedulesAsync();
                     await LoadStudentsAsync();
                 }
                 else
                 {
-                    MessageBox.Show("Ученик уже записан на этот экзамен", "Ошибка",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
             catch (Exception ex)
@@ -349,27 +348,116 @@ namespace DrivingSchool.Views
             }
         }
 
+        /// <summary>
+        /// Проведение экзамена
+        /// </summary>
         private async void ConductExam_Click(object sender, RoutedEventArgs e)
         {
-            var schedule = SchedulesGrid.SelectedItem as ExamSchedule;
-            if (schedule == null) return;
-
-            if (schedule.ExamDate > DateTime.Today)
+            try
             {
-                MessageBox.Show("Нельзя провести экзамен, который еще не наступил", "Внимание",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                var schedule = SchedulesGrid.SelectedItem as ExamSchedule;
+                if (schedule == null)
+                {
+                    MessageBox.Show("Выберите экзамен", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Проведение экзамена: Id={schedule.Id}, Type={schedule.Type}");
+
+                // Получаем студентов, записанных на экзамен (без привязки к этапу)
+                var registeredStudents = await _examService.GetRegisteredStudentsWithStatusForGeneralExamAsync(schedule.Id, schedule.Type);
+
+                if (!registeredStudents.Any())
+                {
+                    MessageBox.Show("На этот экзамен никто не записан", "Информация",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var dialog = new MarkPassedDialog(registeredStudents, schedule.Type); dialog.Owner = Window.GetWindow(this);
+
+                if (dialog.ShowDialog() == true)
+                {
+                    int savedCount = 0;
+                    int failedCount = 0;
+
+                    foreach (var student in registeredStudents)
+                    {
+                        try
+                        {
+                            // Сохраняем результат по теории
+                            if (student.TheoryEditable)
+                            {
+                                int theoryAttempt = student.TheoryAttempts + 1;
+                                await _examService.SaveExamResultAsync(new ExamRecord
+                                {
+                                    StudentId = student.StudentId,
+                                    ScheduleId = schedule.Id,
+                                    Type = schedule.Type,
+                                    Stage = ExamStage.Theory,
+                                    ExamDate = DateTime.Now,
+                                    Result = student.TheoryPassed ? ExamResult.Passed : ExamResult.Failed,
+                                    AttemptNumber = theoryAttempt,
+                                    ExaminerName = "Экзаменатор",
+                                    Notes = student.TheoryPassed ? "Теория сдана" : "Теория не сдана"
+                                });
+                                System.Diagnostics.Debug.WriteLine($"Студент {student.StudentName}: Теория - {(student.TheoryPassed ? "Сдан" : "Не сдан")}, попытка {theoryAttempt}");
+                            }
+
+                            // Сохраняем результат по практике
+                            if (student.PracticeEditable)
+                            {
+                                int practiceAttempt = student.PracticeAttempts + 1;
+                                await _examService.SaveExamResultAsync(new ExamRecord
+                                {
+                                    StudentId = student.StudentId,
+                                    ScheduleId = schedule.Id,
+                                    Type = schedule.Type,
+                                    Stage = ExamStage.Practice,
+                                    ExamDate = DateTime.Now,
+                                    Result = student.PracticePassed ? ExamResult.Passed : ExamResult.Failed,
+                                    AttemptNumber = practiceAttempt,
+                                    ExaminerName = "Экзаменатор",
+                                    Notes = student.PracticePassed ? "Практика сдана" : "Практика не сдана"
+                                });
+                                System.Diagnostics.Debug.WriteLine($"Студент {student.StudentName}: Практика - {(student.PracticePassed ? "Сдан" : "Не сдан")}, попытка {practiceAttempt}");
+                            }
+
+                            savedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            failedCount++;
+                            System.Diagnostics.Debug.WriteLine($"Ошибка сохранения для {student.StudentName}: {ex.Message}");
+                            MessageBox.Show($"Ошибка при сохранении результата для {student.StudentName}: {ex.Message}",
+                                "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"Сохранено: {savedCount}, ошибок: {failedCount}");
+
+                    // Отмечаем экзамен как проведенный
+                    bool conducted = await _examService.MarkExamAsConductedAsync(schedule.Id);
+                    System.Diagnostics.Debug.WriteLine($"Экзамен отмечен как проведенный: {conducted}");
+
+                    var theoryPassedCount = registeredStudents.Count(s => s.TheoryPassed);
+                    var practicePassedCount = registeredStudents.Count(s => s.PracticePassed);
+
+                    MessageBox.Show($"Экзамен проведен!\n" +
+                        $"Теорию сдало: {theoryPassedCount} из {registeredStudents.Count}\n" +
+                        $"Практику сдало: {practicePassedCount} из {registeredStudents.Count}",
+                        "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    await LoadSchedulesAsync();
+                    await LoadStudentsAsync();
+                }
             }
-
-            var result = MessageBox.Show($"Отметить экзамен как проведенный?\n{schedule.ExamDate:dd.MM.yyyy}",
-                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
+            catch (Exception ex)
             {
-                await _examService.MarkExamAsConductedAsync(schedule.Id);
-                MessageBox.Show("Экзамен отмечен как проведенный", "Успех",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-                await LoadSchedulesAsync();
+                System.Diagnostics.Debug.WriteLine($"Общая ошибка: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Стек: {ex.StackTrace}");
+                MessageBox.Show($"Ошибка при проведении экзамена: {ex.Message}\n\n{ex.StackTrace}",
+                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

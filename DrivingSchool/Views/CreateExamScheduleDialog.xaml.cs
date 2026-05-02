@@ -19,31 +19,12 @@ namespace DrivingSchool.Views
             _examService = new ExamService(_dataService.GetConnectionString());
 
             ExamDatePicker.SelectedDate = DateTime.Now;
-            // Убираем ограничение на выбор дат в прошлом
-            // ExamDatePicker.DisplayDateStart = DateTime.Now;
-        }
-
-        private bool TryParseTime(string timeStr, out TimeSpan time)
-        {
-            time = TimeSpan.Zero;
-            var parts = timeStr.Split(':');
-            if (parts.Length == 2 &&
-                int.TryParse(parts[0], out int hours) &&
-                int.TryParse(parts[1], out int minutes) &&
-                hours >= 0 && hours <= 23 &&
-                minutes >= 0 && minutes <= 59)
-            {
-                time = new TimeSpan(hours, minutes, 0);
-                return true;
-            }
-            return false;
         }
 
         private async void CreateBtn_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Проверка даты
                 if (!ExamDatePicker.SelectedDate.HasValue)
                 {
                     MessageBox.Show("Выберите дату экзамена", "Ошибка",
@@ -53,7 +34,6 @@ namespace DrivingSchool.Views
 
                 var examDate = ExamDatePicker.SelectedDate.Value;
 
-                // Проверка даты в прошлом с предупреждением
                 if (examDate < DateTime.Today)
                 {
                     var result = MessageBox.Show(
@@ -67,71 +47,28 @@ namespace DrivingSchool.Views
                         return;
                 }
 
-                // Проверка времени начала
-                if (!TryParseTime(StartTimeTextBox.Text.Trim(), out TimeSpan startTime))
-                {
-                    MessageBox.Show("Неверный формат времени начала.\nИспользуйте формат ЧЧ:ММ (например 09:00 или 14:30)",
-                        "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    StartTimeTextBox.Focus();
-                    return;
-                }
-
-                // Проверка времени окончания
-                if (!TryParseTime(EndTimeTextBox.Text.Trim(), out TimeSpan endTime))
-                {
-                    MessageBox.Show("Неверный формат времени окончания.\nИспользуйте формат ЧЧ:ММ (например 11:00 или 16:30)",
-                        "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    EndTimeTextBox.Focus();
-                    return;
-                }
-
-                // Проверка что начало раньше окончания
-                if (startTime >= endTime)
-                {
-                    MessageBox.Show("Время начала должно быть меньше времени окончания", "Ошибка",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    StartTimeTextBox.Focus();
-                    return;
-                }
-
                 // Определяем тип экзамена
-                ExamType type;
-                if (InternalRadio.IsChecked == true)
-                    type = ExamType.Internal;
-                else
-                    type = ExamType.GIBDD;
+                ExamType type = InternalRadio.IsChecked == true ? ExamType.Internal : ExamType.GIBDD;
 
-                // Определяем этап
-                ExamStage stage;
-                if (TheoryRadio.IsChecked == true)
-                    stage = ExamStage.Theory;
-                else
-                    stage = ExamStage.Practice;
-
-                // Проверка места проведения
-                if (string.IsNullOrWhiteSpace(LocationTextBox.Text))
-                {
-                    MessageBox.Show("Укажите место проведения экзамена", "Ошибка",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    LocationTextBox.Focus();
-                    return;
-                }
+                // Убираем этап - по умолчанию теория (значение не важно, так как при создании не делим)
+                // При отметке результатов будет отдельный выбор теории/практики
+                ExamStage stage = ExamStage.Theory; // Значение по умолчанию
 
                 CreatedSchedule = new ExamSchedule
                 {
                     Type = type,
                     Stage = stage,
                     ExamDate = examDate,
-                    StartTime = startTime,
-                    EndTime = endTime,
+                    StartTime = TimeSpan.FromHours(9),
+                    EndTime = TimeSpan.FromHours(17),
                     MaxStudents = 999,
                     CurrentStudents = 0,
                     ExaminerName = "Не назначен",
-                    Location = LocationTextBox.Text.Trim(),
-                    IsAvailable = true
+                    Location = "Автошкола",
+                    IsAvailable = true,
+                    IsConducted = false
                 };
 
-                // Сохраняем в базу
                 await _examService.CreateExamScheduleAsync(CreatedSchedule);
 
                 DialogResult = true;

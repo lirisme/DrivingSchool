@@ -62,10 +62,8 @@
                                     </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Дата" Binding="{Binding ExamDate, StringFormat=dd.MM.yyyy}" Width="100"/>
-                                        <DataGridTextColumn Header="Время" Binding="{Binding StartTime}" Width="80"/>
                                         <DataGridTextColumn Header="Тип" Binding="{Binding TypeName}" Width="100"/>
                                         <DataGridTextColumn Header="Этап" Binding="{Binding StageName}" Width="80"/>
-                                        <DataGridTextColumn Header="Место" Binding="{Binding Location}" Width="200"/>
                                         <DataGridTextColumn Header="Записано" Binding="{Binding CurrentStudents}" Width="80"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
@@ -96,7 +94,23 @@
                                             </DataGridTextColumn.ElementStyle>
                                         </DataGridTextColumn>
                                         <DataGridTextColumn Header="Всего" Binding="{Binding TotalLessons}" Width="60"/>
-                                        <DataGridTextColumn Header="Статус" Binding="{Binding OverallStatus}" Width="150"/>
+
+                                        
+                                        <!-- =============================== -->
+
+                                        <!-- Старая колонка статуса (временно отключена)
+<DataGridTextColumn Header="Статус" Binding="{Binding OverallStatus}" Width="150"/>
+-->
+                                        <!-- ========== ИИ КОЛОНКИ ========== -->
+                                        <DataGridTextColumn Header="🤖 ИИ-рекомендация" Binding="{Binding AIRecommendationText}" Width="320"/>
+                                        <DataGridTextColumn Header="Готовность" Binding="{Binding AIReadinessScore}" Width="80">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                    <Setter Property="Foreground" Value="{Binding AIReadinessColor}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
                                         <DataGridTemplateColumn Header="Запись" Width="80">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>

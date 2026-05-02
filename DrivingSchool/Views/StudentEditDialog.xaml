@@ -5,6 +5,7 @@
         Height="750" 
         Width="600"
         WindowStartupLocation="CenterOwner"
+        PreviewKeyDown="Window_PreviewKeyDown"
         ResizeMode="NoResize">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,0,-6">
@@ -74,12 +75,18 @@
                      Text="{Binding BirthPlace, UpdateSourceTrigger=PropertyChanged}" 
                      Margin="0,5" Padding="5" MaxLength="200"/>
 
-            <!-- Телефон -->
+            
+            <!-- Телефон (с маской) -->
             <TextBlock Grid.Row="6" Grid.Column="0" Text="Телефон:*" VerticalAlignment="Center" Margin="0,5"/>
-            <TextBox x:Name="PhoneTextBox" Grid.Row="6" Grid.Column="1" 
-                     Text="{Binding Phone, UpdateSourceTrigger=PropertyChanged}" 
-                     Margin="0,5" Padding="5" MaxLength="20"/>
-
+            <TextBox x:Name="PhoneTextBox"
+         Grid.Row="6" Grid.Column="1"
+         Text="{Binding Phone}"
+         PreviewTextInput="PhoneTextBox_PreviewTextInput"
+         PreviewKeyDown="PhoneTextBox_PreviewKeyDown"
+         DataObject.Pasting="PhoneTextBox_Pasting"
+         GotFocus="PhoneTextBox_GotFocus"
+         Margin="0,5" Padding="5"/>
+            
             <!-- Email -->
             <TextBlock Grid.Row="7" Grid.Column="0" Text="Email:" VerticalAlignment="Center" Margin="0,5"/>
             <TextBox x:Name="EmailTextBox" Grid.Row="7" Grid.Column="1" 
@@ -104,7 +111,7 @@
             <!-- Группа -->
             <TextBlock Grid.Row="10" Grid.Column="0" Text="Группа:" VerticalAlignment="Center" Margin="0,5"/>
             <ComboBox x:Name="GroupComboBox" Grid.Row="10" Grid.Column="1" 
-                      DisplayMemberPath="DisplayText" SelectedValuePath="Id"
+                      DisplayMemberPath="Name" SelectedValuePath="Id"
                       SelectedValue="{Binding GroupId}"
                       Margin="0,5" Padding="5" Height="30"/>
 
@@ -159,11 +166,11 @@
                       SelectedValue="{Binding CarId}"
                       Margin="0,5" Padding="5" Height="30"/>
 
-            <!-- Возраст (авто) -->
+            <!-- Возраст -->
             <TextBlock Grid.Row="19" Grid.Column="0" Text="Возраст:" VerticalAlignment="Center" Margin="0,5"/>
             <TextBox x:Name="AgeTextBox" Grid.Row="19" Grid.Column="1" 
-                 Text="{Binding Age, Mode=OneWay}" IsReadOnly="True"
-                 Margin="0,5" Padding="5" Background="#F0F0F0"/>
+                     Text="{Binding Age, Mode=OneWay}" IsReadOnly="True"
+                     Margin="0,5" Padding="5" Background="#F0F0F0"/>
 
             <!-- Кнопки -->
             <StackPanel Grid.Row="21" Grid.ColumnSpan="2" 

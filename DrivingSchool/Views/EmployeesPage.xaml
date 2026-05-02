@@ -69,7 +69,6 @@
                   Margin="0,0,0,10">
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
                 <DataGridTextColumn Header="Фамилия" Binding="{Binding LastName}" Width="120"/>
                 <DataGridTextColumn Header="Имя" Binding="{Binding FirstName}" Width="120"/>
                 <DataGridTextColumn Header="Отчество" Binding="{Binding MiddleName}" Width="120"/>

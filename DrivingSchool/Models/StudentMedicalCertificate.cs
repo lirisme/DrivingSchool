@@ -21,11 +21,22 @@ namespace DrivingSchool.Models
         public bool IsValid => ValidUntil >= DateTime.Today;
         public string StudentName { get; set; }
         public string StatusText => IsValid ? "Действительна" : "Просрочена";
-        public string StatusColor => IsValid ? "Green" : "Red";
+        public string StatusColor
+        {
+            get
+            {
+                var daysLeft = (ValidUntil - DateTime.Today).Days;
+                if (daysLeft < 0) return "Red";
+                if (daysLeft <= 30) return "Yellow";
+                return "Green";
+            }
+        }
     }
 
     public class StudentMedicalCertificateCollection
     {
         public System.Collections.Generic.List<StudentMedicalCertificate> Certificates { get; set; } = new System.Collections.Generic.List<StudentMedicalCertificate>();
     }
+
+
 }

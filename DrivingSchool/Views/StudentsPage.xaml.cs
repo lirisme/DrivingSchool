@@ -52,7 +52,6 @@ namespace DrivingSchool.Views
 
                 System.Diagnostics.Debug.WriteLine($"Загружено студентов: {_students.Students.Count}");
 
-                // Загружаем документы
                 LoadDocuments();
 
                 ApplyFilter();
@@ -67,7 +66,7 @@ namespace DrivingSchool.Views
                     MessageBoxButton.OK, MessageBoxImage.Error);
 
                 _students = new StudentCollection { Students = new List<Student>() };
-                LoadDocuments(); // Все равно загружаем документы (они будут пустыми)
+                LoadDocuments();
                 ApplyFilter();
             }
         }

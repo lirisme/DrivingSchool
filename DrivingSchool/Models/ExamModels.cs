@@ -53,6 +53,8 @@ namespace DrivingSchool.Models
     {
         private int _id;
         private int _studentId;
+        private int? _scheduleId;  // <-- ДОБАВИТЬ ЭТО ПОЛЕ
+
         private ExamType _type;
         private ExamStage _stage;
         private DateTime _examDate;
@@ -75,6 +77,12 @@ namespace DrivingSchool.Models
         {
             get => _studentId;
             set { _studentId = value; OnPropertyChanged(nameof(StudentId)); }
+        }
+
+        public int? ScheduleId  // <-- ДОБАВИТЬ ЭТОТ БЛОК
+        {
+            get => _scheduleId;
+            set { _scheduleId = value; OnPropertyChanged(nameof(ScheduleId)); }
         }
 
         public ExamType Type
@@ -203,6 +211,14 @@ namespace DrivingSchool.Models
 
         public string LessonsColor => CompletedLessons >= TotalLessons ? "Green" :
                                        CompletedLessons >= TotalLessons / 2 ? "Orange" : "Gray";
+
+        // ========== ДОБАВЬТЕ ЭТИ ПОЛЯ ДЛЯ ИИ ==========
+        public string AIRecommendationText { get; set; }
+        public double AIReadinessScore { get; set; }
+        public string AIReadinessColor { get; set; }
+        // ===============================================
+
+        public bool IsPassed { get; set; }  // для отметки в диалоге
     }
 
     /// <summary>
@@ -222,6 +238,8 @@ namespace DrivingSchool.Models
             public string Location { get; set; }
             public bool IsAvailable { get; set; }
 
+            public bool IsConducted { get; set; }  // <-- ДОБАВИТЬ
+
             public string DisplayText => $"{GetTypeName()} - {GetStageName()} - {ExamDate:dd.MM.yyyy} ({StartTime:hh\\:mm})";
             public string StatusDisplay => IsAvailable ? $"Свободно {MaxStudents - CurrentStudents} мест" : "Занято";
 
@@ -235,5 +253,8 @@ namespace DrivingSchool.Models
         public bool InternalPracticePassed { get; set; }
         public bool GIBDDTheoryPassed { get; set; }
         public bool GIBDDPracticePassed { get; set; }
+
+        public int InternalTheoryAttempts { get; set; }
+        public int InternalPracticeAttempts { get; set; }
     }
 }

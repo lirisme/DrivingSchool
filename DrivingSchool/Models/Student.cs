@@ -28,7 +28,10 @@ namespace DrivingSchool.Models
         public DateTime CreatedDate { get; set; }
         public DateTime? ModifiedDate { get; set; }
 
-        // Вычисляемое полное имя
+        // ========== ДОБАВЛЕНО ==========
+        public int? MissedLessons { get; set; }  // <-- ДОБАВЬТЕ ЭТУ СТРОКУ
+                                                 // =========================================
+                                                 // Вычисляемое полное имя
         public string FullName
         {
             get

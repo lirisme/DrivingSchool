@@ -94,17 +94,24 @@
                     Click="MergeGroups_Click"
                     Width="150" Height="35" 
                     Background="#9C27B0" Foreground="White"
-                    Margin="0,0,10,0"
-                    IsEnabled="False"
-                    
-        ToolTip="Объединить несколько групп в одну (выберите 2+ группы через Ctrl)"/>
+                    Margin="0,0,10,0" IsEnabled="False"
+                    ToolTip="Объединить несколько групп в одну (выберите 2+ группы через Ctrl)"/>
+
             <Button x:Name="MoveStudentButton" 
                     Content="🔄 Переместить" 
                     Click="MoveStudentToGroup_Click"
                     Width="120" Height="35" 
                     Background="#00BCD4" Foreground="White" 
-                    IsEnabled="False"
+                    Margin="0,0,10,0" IsEnabled="False"
                     ToolTip="Переместить студента в другую группу"/>
+
+            <Button x:Name="ExportGroupButton" 
+                    Content="📊 Экспорт списка группы" 
+                    Click="ExportGroupButton_Click"
+                    Width="180" Height="35" 
+                    Background="#4CAF50" Foreground="White" 
+                    IsEnabled="False"
+                    ToolTip="Экспорт списка студентов группы в Excel"/>
         </WrapPanel>
 
         <!-- Таблица с группами -->
