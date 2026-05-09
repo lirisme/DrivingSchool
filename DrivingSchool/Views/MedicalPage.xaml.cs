@@ -32,11 +32,9 @@ namespace DrivingSchool.Views
                 _students = _dataService.LoadStudents() ?? new StudentCollection { Students = new List<Student>() };
                 Debug.WriteLine($"Загружено студентов: {_students.Students.Count}");
 
-                // ИСПРАВЛЕНИЕ: загружаем реальные данные!
                 _medicalList = _dataService.LoadMedicalData() ?? new StudentMedicalCertificateCollection { Certificates = new List<StudentMedicalCertificate>() };
                 Debug.WriteLine($"Загружено справок: {_medicalList.Certificates.Count}");
 
-                // Отладка: выводим все загруженные справки
                 foreach (var med in _medicalList.Certificates)
                 {
                     Debug.WriteLine($"  Справка ID={med.Id}, Студент ID={med.StudentId}, Серия={med.Series}, Номер={med.Number}");
@@ -62,7 +60,7 @@ namespace DrivingSchool.Views
 
                 if (_selectedStudent != null)
                 {
-                    Debug.WriteLine($"Выбран студент ID={_selectedStudent.Id}, Name={_selectedStudent.FullName}");
+                    Debug.WriteLine($"Выбран студент: {_selectedStudent.FullName}");
 
                     var filtered = _medicalList.Certificates
                         .Where(m => m.StudentId == _selectedStudent.Id)
@@ -72,8 +70,6 @@ namespace DrivingSchool.Views
                             return m;
                         })
                         .ToList();
-
-                    Debug.WriteLine($"Найдено справок для студента: {filtered.Count}");
 
                     MedicalGrid.ItemsSource = filtered;
 
@@ -89,8 +85,6 @@ namespace DrivingSchool.Views
                 }
                 else
                 {
-                    Debug.WriteLine("Студент не выбран, показываем все справки");
-
                     var allMedical = _medicalList.Certificates
                         .Select(m =>
                         {
@@ -174,7 +168,7 @@ namespace DrivingSchool.Views
             {
                 SelectedStudentPanel.Visibility = Visibility.Visible;
                 SelectedStudentText.Text = _selectedStudent.FullName;
-                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone} | ID: {_selectedStudent.Id}";
+                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone}";
             }
             else
             {
@@ -189,19 +183,10 @@ namespace DrivingSchool.Views
                 var hasStudent = _selectedStudent != null;
                 var hasSelection = MedicalGrid.SelectedItem != null;
 
-                Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasSelection={hasSelection}");
-
-                // ИСПРАВЛЕНИЕ: можно добавлять несколько справок (каждый год новая)
                 AddMedicalButton.IsEnabled = hasStudent;
                 EditMedicalButton.IsEnabled = hasSelection;
                 DeleteMedicalButton.IsEnabled = hasSelection;
                 ViewMedicalButton.IsEnabled = hasSelection;
-
-                // Визуальная индикация
-                AddMedicalButton.Opacity = AddMedicalButton.IsEnabled ? 1.0 : 0.5;
-                EditMedicalButton.Opacity = EditMedicalButton.IsEnabled ? 1.0 : 0.5;
-                DeleteMedicalButton.Opacity = DeleteMedicalButton.IsEnabled ? 1.0 : 0.5;
-                ViewMedicalButton.Opacity = ViewMedicalButton.IsEnabled ? 1.0 : 0.5;
             }
             catch (Exception ex)
             {
@@ -211,7 +196,46 @@ namespace DrivingSchool.Views
 
         private void MedicalGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Если выбран паспорт - находим студента
+            if (MedicalGrid.SelectedItem is StudentMedicalCertificate selectedMedical)
+            {
+                var student = _students?.Students?.FirstOrDefault(s => s.Id == selectedMedical.StudentId);
+                if (student != null)
+                {
+                    _selectedStudent = student;
+                    UpdateSelectedStudentPanel();
+                    ApplyFilter(); // Обновляем фильтр для этого студента
+                }
+            }
+
             UpdateButtonsAvailability();
+        }
+
+        // Клик по пустому месту для сброса выбора
+        private void MedicalGrid_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(MedicalGrid, e.GetPosition(MedicalGrid));
+            var row = FindVisualParent<DataGridRow>(hit?.VisualHit as System.Windows.DependencyObject);
+
+            if (row == null)
+            {
+                _selectedStudent = null;
+                SelectedStudentPanel.Visibility = Visibility.Collapsed;
+                MedicalGrid.SelectedItem = null;
+                ApplyFilter();
+                e.Handled = true;
+            }
+        }
+
+        private T FindVisualParent<T>(System.Windows.DependencyObject child) where T : System.Windows.DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+            }
+            return null;
         }
 
         private void AddMedical_Click(object sender, RoutedEventArgs e)
@@ -225,33 +249,19 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Добавление справки для студента ID={_selectedStudent.Id}");
-
                 var dialog = new MedicalEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
                     _medicalList = _dataService.LoadMedicalData() ?? new StudentMedicalCertificateCollection { Certificates = new List<StudentMedicalCertificate>() };
-
-                    Debug.WriteLine($"После перезагрузки справок: {_medicalList.Certificates.Count}");
-
                     ApplyFilter();
-
                     MessageBox.Show("Медицинская справка успешно добавлена!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    Debug.WriteLine("Диалог закрыт с Cancel");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при добавлении: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -275,27 +285,19 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Редактирование справки ID={selectedMedical.Id}");
-
                 var dialog = new MedicalEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedMedical);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
                     _medicalList = _dataService.LoadMedicalData() ?? new StudentMedicalCertificateCollection { Certificates = new List<StudentMedicalCertificate>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Медицинская справка успешно обновлена!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при редактировании: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -322,21 +324,14 @@ namespace DrivingSchool.Views
             {
                 try
                 {
-                    Debug.WriteLine($"Удаление справки ID={selectedMedical.Id}");
-
                     _dataService.DeleteMedicalData(selectedMedical.Id);
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после удаления
                     _medicalList = _dataService.LoadMedicalData() ?? new StudentMedicalCertificateCollection { Certificates = new List<StudentMedicalCertificate>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Медицинская справка удалена.", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"ОШИБКА при удалении: {ex.Message}");
                     MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -385,7 +380,6 @@ namespace DrivingSchool.Views
             SearchResultsListBox.Visibility = Visibility.Collapsed;
         }
 
-        // НОВЫЙ МЕТОД: очистка выбранного студента
         private void ClearSelectedStudent_Click(object sender, RoutedEventArgs e)
         {
             _selectedStudent = null;
@@ -393,19 +387,25 @@ namespace DrivingSchool.Views
             ApplyFilter();
         }
 
-        private string GetStatusColor(DateTime validUntil)
-        {
-            var daysLeft = (validUntil - DateTime.Today).Days;
-            if (daysLeft < 0) return "Red";
-            if (daysLeft <= 30) return "Yellow";
-            return "Green";
-        }
-
         private void MedicalGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (MedicalGrid.SelectedItem != null && _selectedStudent != null)
+            if (MedicalGrid.SelectedItem is StudentMedicalCertificate selectedMedical)
             {
-                EditMedical_Click(sender, e);
+                // Находим студента по справке, если он не выбран
+                if (_selectedStudent == null || _selectedStudent.Id != selectedMedical.StudentId)
+                {
+                    _selectedStudent = _students?.Students?.FirstOrDefault(s => s.Id == selectedMedical.StudentId);
+                    if (_selectedStudent != null)
+                    {
+                        UpdateSelectedStudentPanel();
+                        ApplyFilter();
+                    }
+                }
+
+                if (_selectedStudent != null)
+                {
+                    EditMedical_Click(sender, e);
+                }
             }
         }
     }

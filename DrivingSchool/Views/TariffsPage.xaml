@@ -50,7 +50,6 @@
                   Margin="0,0,0,10">
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
                 <DataGridTextColumn Header="Название" Binding="{Binding Name}" Width="200"/>
                 <DataGridTextColumn Header="Категория" Binding="{Binding Category}" Width="100"/>
                 <DataGridTextColumn Header="Длительность (мес)" Binding="{Binding DurationMonths}" Width="120"/>

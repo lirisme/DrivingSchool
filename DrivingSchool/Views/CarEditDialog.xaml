@@ -1,14 +1,16 @@
 ﻿<Window x:Class="DrivingSchool.Views.CarEditDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Редактирование автомобиля" 
-        Height="500" 
-        Width="550"
+        Title="Редактирование транспортного средства" 
+        Height="600" 
+        Width="500"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -47,14 +49,23 @@
         <!-- Госномер -->
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Госномер:*" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="LicensePlateTextBox" Grid.Row="3" Grid.Column="1" 
-                 Text="{Binding LicensePlate, UpdateSourceTrigger=PropertyChanged}" 
-                 Margin="0,5" Padding="5" MaxLength="15"/>
+                 Text="{Binding LicensePlate, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewTextInput="LicensePlateTextBox_PreviewTextInput"
+                 PreviewKeyDown="LicensePlateTextBox_PreviewKeyDown"
+                 DataObject.Pasting="LicensePlateTextBox_Pasting"
+                 GotFocus="LicensePlateTextBox_GotFocus"
+                 LostFocus="LicensePlateTextBox_LostFocus"
+                 MaxLength="12"
+                 Margin="0,5" Padding="5"
+                 CharacterCasing="Upper"/>
 
         <!-- Год выпуска -->
-        <TextBlock Grid.Row="4" Grid.Column="0" Text="Год выпуска:" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="Год выпуска:*" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="YearTextBox" Grid.Row="4" Grid.Column="1" 
-                 Text="{Binding Year, UpdateSourceTrigger=PropertyChanged}" 
-                 Margin="0,5" Padding="5" MaxLength="4"/>
+                 Text="{Binding Year, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewTextInput="YearTextBox_PreviewTextInput"
+                 MaxLength="4"
+                 Margin="0,5" Padding="5"/>
 
         <!-- Цвет -->
         <TextBlock Grid.Row="5" Grid.Column="0" Text="Цвет:" VerticalAlignment="Center" Margin="0,5"/>
@@ -62,42 +73,40 @@
                  Text="{Binding Color, UpdateSourceTrigger=PropertyChanged}" 
                  Margin="0,5" Padding="5" MaxLength="30"/>
 
-        <!-- Категория -->
-        <TextBlock Grid.Row="6" Grid.Column="0" Text="Категория:" VerticalAlignment="Center" Margin="0,5"/>
+        <!-- Категория ТС (из базы данных) -->
+        <TextBlock Grid.Row="6" Grid.Column="0" Text="Категория ТС:*" VerticalAlignment="Center" Margin="0,5"/>
         <ComboBox x:Name="CategoryComboBox" Grid.Row="6" Grid.Column="1" 
-          SelectedValue="{Binding Category}"
-          SelectedValuePath="Content"
-          Margin="0,5" Padding="5" Height="30">
-            <ComboBoxItem Content="A"/>
-            <ComboBoxItem Content="B"/>
-            <ComboBoxItem Content="C"/>
-            <ComboBoxItem Content="D"/>
-            <ComboBoxItem Content="BE"/>
-            <ComboBoxItem Content="CE"/>
-            <ComboBoxItem Content="DE"/>
-        </ComboBox>
+                  DisplayMemberPath="DisplayText" 
+                  SelectedValuePath="Code"
+                  Margin="0,5" Padding="5" Height="30"/>
 
-        <!-- VIN -->
-        <TextBlock Grid.Row="7" Grid.Column="0" Text="VIN:" VerticalAlignment="Center" Margin="0,5"/>
+        <!-- VIN номер -->
+        <TextBlock Grid.Row="7" Grid.Column="0" Text="VIN номер:" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="VINTextBox" Grid.Row="7" Grid.Column="1" 
-                 Text="{Binding VIN, UpdateSourceTrigger=PropertyChanged}" 
-                 Margin="0,5" Padding="5" MaxLength="50"/>
+                 Text="{Binding VIN, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewTextInput="VINTextBox_PreviewTextInput"
+                 MaxLength="17"
+                 Margin="0,5" Padding="5"
+                 CharacterCasing="Upper"/>
 
         <!-- Инструктор -->
         <TextBlock Grid.Row="8" Grid.Column="0" Text="Инструктор:" VerticalAlignment="Center" Margin="0,5"/>
         <ComboBox x:Name="InstructorComboBox" Grid.Row="8" Grid.Column="1" 
-                  DisplayMemberPath="FullName" SelectedValuePath="Id"
+                  DisplayMemberPath="FullName" 
+                  SelectedValuePath="Id"
                   SelectedValue="{Binding InstructorId}"
                   Margin="0,5" Padding="5" Height="30"/>
 
         <!-- Активен -->
-        <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10">
-            <CheckBox x:Name="IsActiveCheckBox" IsChecked="{Binding IsActive}" VerticalAlignment="Center"/>
-            <TextBlock Text="Автомобиль активен" Margin="5,0,0,0" VerticalAlignment="Center"/>
-        </StackPanel>
+        <TextBlock Grid.Row="9" Grid.Column="0" Text="Статус:" VerticalAlignment="Center" Margin="0,5"/>
+        <CheckBox x:Name="IsActiveCheckBox" Grid.Row="9" Grid.Column="1" 
+                  IsChecked="{Binding IsActive, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                  Content="ТС в эксплуатации"
+                  VerticalAlignment="Center"
+                  Margin="0,5" Padding="5"/>
 
         <!-- Кнопки -->
-        <StackPanel Grid.Row="10" Grid.ColumnSpan="2" 
+        <StackPanel Grid.Row="11" Grid.ColumnSpan="2" 
                     Orientation="Horizontal" 
                     HorizontalAlignment="Right" 
                     Margin="0,20,0,0">

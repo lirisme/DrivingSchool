@@ -32,11 +32,9 @@ namespace DrivingSchool.Views
                 _students = _dataService.LoadStudents() ?? new StudentCollection { Students = new List<Student>() };
                 Debug.WriteLine($"Загружено студентов: {_students.Students.Count}");
 
-                // ИСПРАВЛЕНИЕ: загружаем реальные данные!
                 _snilsList = _dataService.LoadSNILSData() ?? new StudentSNILSCollection { SNILSList = new List<StudentSNILS>() };
                 Debug.WriteLine($"Загружено СНИЛС: {_snilsList.SNILSList.Count}");
 
-                // Отладка: выводим все загруженные СНИЛС
                 foreach (var snils in _snilsList.SNILSList)
                 {
                     Debug.WriteLine($"  СНИЛС ID={snils.Id}, Студент ID={snils.StudentId}, Номер={snils.Number}");
@@ -62,7 +60,7 @@ namespace DrivingSchool.Views
 
                 if (_selectedStudent != null)
                 {
-                    Debug.WriteLine($"Выбран студент ID={_selectedStudent.Id}, Name={_selectedStudent.FullName}");
+                    Debug.WriteLine($"Выбран студент: {_selectedStudent.FullName}");
 
                     var filtered = _snilsList.SNILSList
                         .Where(s => s.StudentId == _selectedStudent.Id)
@@ -72,8 +70,6 @@ namespace DrivingSchool.Views
                             return s;
                         })
                         .ToList();
-
-                    Debug.WriteLine($"Найдено СНИЛС для студента: {filtered.Count}");
 
                     SNILSGrid.ItemsSource = filtered;
 
@@ -88,8 +84,6 @@ namespace DrivingSchool.Views
                 }
                 else
                 {
-                    Debug.WriteLine("Студент не выбран, показываем все СНИЛС");
-
                     var allSNILS = _snilsList.SNILSList
                         .Select(s =>
                         {
@@ -169,7 +163,7 @@ namespace DrivingSchool.Views
             {
                 SelectedStudentPanel.Visibility = Visibility.Visible;
                 SelectedStudentText.Text = _selectedStudent.FullName;
-                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone} | ID: {_selectedStudent.Id}";
+                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone}";
             }
             else
             {
@@ -182,24 +176,13 @@ namespace DrivingSchool.Views
             try
             {
                 var hasStudent = _selectedStudent != null;
-
-                // Проверяем наличие СНИЛС для выбранного студента
                 var hasSNILSData = hasStudent && _snilsList.SNILSList.Any(s => s.StudentId == _selectedStudent.Id);
                 var hasSelection = SNILSGrid.SelectedItem != null;
 
-                Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasSNILSData={hasSNILSData}, hasSelection={hasSelection}");
-
-                // ИСПРАВЛЕНИЕ: как в паспортах - один СНИЛС на студента!
                 AddSNILSButton.IsEnabled = hasStudent && !hasSNILSData;
                 EditSNILSButton.IsEnabled = hasSNILSData && hasSelection;
                 DeleteSNILSButton.IsEnabled = hasSNILSData && hasSelection;
                 ViewSNILSButton.IsEnabled = hasSNILSData && hasSelection;
-
-                // Визуальная индикация
-                AddSNILSButton.Opacity = AddSNILSButton.IsEnabled ? 1.0 : 0.5;
-                EditSNILSButton.Opacity = EditSNILSButton.IsEnabled ? 1.0 : 0.5;
-                DeleteSNILSButton.Opacity = DeleteSNILSButton.IsEnabled ? 1.0 : 0.5;
-                ViewSNILSButton.Opacity = ViewSNILSButton.IsEnabled ? 1.0 : 0.5;
             }
             catch (Exception ex)
             {
@@ -210,6 +193,41 @@ namespace DrivingSchool.Views
         private void SNILSGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             UpdateButtonsAvailability();
+        }
+
+        private void SNILSGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (SNILSGrid.SelectedItem != null && _selectedStudent != null)
+            {
+                EditSNILS_Click(sender, e);
+            }
+        }
+
+        // Клик по пустому месту для сброса выбора
+        private void SNILSGrid_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(SNILSGrid, e.GetPosition(SNILSGrid));
+            var row = FindVisualParent<DataGridRow>(hit?.VisualHit as System.Windows.DependencyObject);
+
+            if (row == null)
+            {
+                _selectedStudent = null;
+                SelectedStudentPanel.Visibility = Visibility.Collapsed;
+                SNILSGrid.SelectedItem = null;
+                ApplyFilter();
+                e.Handled = true;
+            }
+        }
+
+        private T FindVisualParent<T>(System.Windows.DependencyObject child) where T : System.Windows.DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+            }
+            return null;
         }
 
         private void AddSNILS_Click(object sender, RoutedEventArgs e)
@@ -223,33 +241,19 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Добавление СНИЛС для студента ID={_selectedStudent.Id}");
-
                 var dialog = new SNILSEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
                     _snilsList = _dataService.LoadSNILSData() ?? new StudentSNILSCollection { SNILSList = new List<StudentSNILS>() };
-
-                    Debug.WriteLine($"После перезагрузки СНИЛС: {_snilsList.SNILSList.Count}");
-
                     ApplyFilter();
-
                     MessageBox.Show("Данные СНИЛС успешно добавлены!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    Debug.WriteLine("Диалог закрыт с Cancel");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при добавлении: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -273,27 +277,19 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Редактирование СНИЛС ID={selectedSNILS.Id}");
-
                 var dialog = new SNILSEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedSNILS);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
                     _snilsList = _dataService.LoadSNILSData() ?? new StudentSNILSCollection { SNILSList = new List<StudentSNILS>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Данные СНИЛС успешно обновлены!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при редактировании: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -320,21 +316,14 @@ namespace DrivingSchool.Views
             {
                 try
                 {
-                    Debug.WriteLine($"Удаление СНИЛС ID={selectedSNILS.Id}");
-
                     _dataService.DeleteSNILSData(selectedSNILS.Id);
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после удаления
                     _snilsList = _dataService.LoadSNILSData() ?? new StudentSNILSCollection { SNILSList = new List<StudentSNILS>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Данные СНИЛС удалены.", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"ОШИБКА при удалении: {ex.Message}");
                     MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -374,20 +363,11 @@ namespace DrivingSchool.Views
             SearchResultsListBox.Visibility = Visibility.Collapsed;
         }
 
-        // НОВЫЙ МЕТОД: очистка выбранного студента
         private void ClearSelectedStudent_Click(object sender, RoutedEventArgs e)
         {
             _selectedStudent = null;
             SelectedStudentPanel.Visibility = Visibility.Collapsed;
             ApplyFilter();
-        }
-
-        private void SNILSGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (SNILSGrid.SelectedItem != null && _selectedStudent != null)
-            {
-                EditSNILS_Click(sender, e);
-            }
         }
     }
 }

@@ -245,7 +245,10 @@ namespace DrivingSchool.Models
 
             private string GetTypeName() => Type == ExamType.Internal ? "Внутренний" : "ГИБДД";
             private string GetStageName() => Stage == ExamStage.Theory ? "Теория" : "Практика";
-        }
+
+        public string StageName => Stage == ExamStage.Theory ? "Теория" : "Практика";
+        public string TypeName => Type == ExamType.Internal ? "Внутренний" : "ГИБДД";
+    }
 
     public class StudentExamStatus
     {

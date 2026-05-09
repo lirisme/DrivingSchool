@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Отметка результатов экзамена" 
-        Height="500" 
-        Width="800"
+        Height="450" 
+        Width="700"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
     <Grid Margin="10">
@@ -13,10 +13,8 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="Отметьте, что сдал каждый студент:" 
-                   FontWeight="Bold" 
-                   Margin="5"
-                   FontSize="14"/>
+        <TextBlock x:Name="TitleText" Text="Отметьте, что сдал каждый студент:" 
+                   FontWeight="Bold" Margin="5" FontSize="14"/>
 
         <DataGrid x:Name="StudentsGrid" 
                   Grid.Row="1"
@@ -28,7 +26,7 @@
                   CanUserResizeColumns="True"
                   CanUserSortColumns="True"
                   AlternatingRowBackground="LightGray"
-                  RowHeight="30">
+                  RowHeight="35">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Студент" 
                                     Binding="{Binding StudentName, Mode=OneWay}" 
@@ -40,24 +38,12 @@
                                     Width="80"
                                     IsReadOnly="True"/>
 
-                <!-- Чекбокс для теории -->
-                <DataGridTemplateColumn Header="Теория" Width="80">
+                <!-- Чекбокс для результата (только один, в зависимости от этапа) -->
+                <DataGridTemplateColumn x:Name="ResultColumn" Header="Результат" Width="100">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <CheckBox IsChecked="{Binding TheoryPassed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                      IsEnabled="{Binding TheoryEditable}"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-
-                <!-- Чекбокс для практики -->
-                <DataGridTemplateColumn Header="Практика" Width="80">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <CheckBox IsChecked="{Binding PracticePassed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                      IsEnabled="{Binding PracticeEditable}"
+                            <CheckBox IsChecked="{Binding ExamPassed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding ExamEditable}"
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center"/>
                         </DataTemplate>
@@ -71,34 +57,16 @@
 
                 <DataGridTextColumn Header="Статус" 
                                     Binding="{Binding StatusDisplay, Mode=OneWay}" 
-                                    Width="180"
+                                    Width="220"
                                     IsReadOnly="True">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground" Value="Black"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="Ожидает сдачи">
-                                    <Setter Property="Foreground" Value="Orange"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="✅ Уже сданы оба этапа">
+                                <DataTrigger Binding="{Binding StatusDisplay}" Value="✅ Сдан">
                                     <Setter Property="Foreground" Value="Green"/>
                                 </DataTrigger>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="✅ Теория сдана, нужно сдать практику">
-                                    <Setter Property="Foreground" Value="Green"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="✅ Практика сдана, нужно сдать теорию">
-                                    <Setter Property="Foreground" Value="Green"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="❌ Нет допуска (не сдана внутренняя теория)">
-                                    <Setter Property="Foreground" Value="Red"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="❌ Нет допуска (не сдана внутренняя практика)">
-                                    <Setter Property="Foreground" Value="Red"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="⚠️ Превышены попытки теории (3/3)">
-                                    <Setter Property="Foreground" Value="Red"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding StatusDisplay}" Value="⚠️ Превышены попытки практики (3/3)">
+                                <DataTrigger Binding="{Binding StatusDisplay}" Value="❌ Не сдан">
                                     <Setter Property="Foreground" Value="Red"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -118,14 +86,9 @@
                     Height="35"
                     Margin="5" 
                     Padding="10,5"
-                    IsDefault="True">
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Setter Property="Background" Value="LightGreen"/>
-                        <Setter Property="FontWeight" Value="Bold"/>
-                    </Style>
-                </Button.Style>
-            </Button>
+                    IsDefault="True"
+                    Background="LightGreen"
+                    FontWeight="Bold"/>
             <Button Content="Отмена" 
                     Click="Cancel_Click" 
                     Width="100" 

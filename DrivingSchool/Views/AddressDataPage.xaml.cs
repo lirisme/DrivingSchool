@@ -32,15 +32,8 @@ namespace DrivingSchool.Views
                 _students = _dataService.LoadStudents() ?? new StudentCollection { Students = new List<Student>() };
                 Debug.WriteLine($"Загружено студентов: {_students.Students.Count}");
 
-                // ИСПРАВЛЕНИЕ: загружаем реальные данные!
                 _addresses = _dataService.LoadAddresses() ?? new StudentRegistrationAddressCollection { Addresses = new List<StudentRegistrationAddress>() };
                 Debug.WriteLine($"Загружено адресов: {_addresses.Addresses.Count}");
-
-                // Отладка: выводим все загруженные адреса
-                foreach (var address in _addresses.Addresses)
-                {
-                    Debug.WriteLine($"  Адрес ID={address.Id}, Студент ID={address.StudentId}, {address.City}, {address.Street}");
-                }
 
                 ApplyFilter();
             }
@@ -58,12 +51,8 @@ namespace DrivingSchool.Views
         {
             try
             {
-                Debug.WriteLine("=== ПРИМЕНЕНИЕ ФИЛЬТРА ===");
-
                 if (_selectedStudent != null)
                 {
-                    Debug.WriteLine($"Выбран студент ID={_selectedStudent.Id}, Name={_selectedStudent.FullName}");
-
                     var filtered = _addresses.Addresses
                         .Where(a => a.StudentId == _selectedStudent.Id)
                         .Select(a =>
@@ -72,8 +61,6 @@ namespace DrivingSchool.Views
                             return a;
                         })
                         .ToList();
-
-                    Debug.WriteLine($"Найдено адресов для студента: {filtered.Count}");
 
                     AddressGrid.ItemsSource = filtered;
 
@@ -88,8 +75,6 @@ namespace DrivingSchool.Views
                 }
                 else
                 {
-                    Debug.WriteLine("Студент не выбран, показываем все адреса");
-
                     var allAddresses = _addresses.Addresses
                         .Select(a =>
                         {
@@ -169,7 +154,7 @@ namespace DrivingSchool.Views
             {
                 SelectedStudentPanel.Visibility = Visibility.Visible;
                 SelectedStudentText.Text = _selectedStudent.FullName;
-                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone} | ID: {_selectedStudent.Id}";
+                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone}";
             }
             else
             {
@@ -182,26 +167,13 @@ namespace DrivingSchool.Views
             try
             {
                 var hasStudent = _selectedStudent != null;
-
-                // Проверяем наличие адреса для выбранного студента
                 var hasAddress = hasStudent && _addresses.Addresses.Any(a => a.StudentId == _selectedStudent.Id);
                 var hasSelection = AddressGrid.SelectedItem != null;
 
-                Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasAddress={hasAddress}, hasSelection={hasSelection}");
-
-                // ИСПРАВЛЕНИЕ: как в паспортах - один адрес на студента!
                 AddAddressButton.IsEnabled = hasStudent && !hasAddress;
                 EditAddressButton.IsEnabled = hasAddress && hasSelection;
                 DeleteAddressButton.IsEnabled = hasAddress && hasSelection;
                 ViewAddressButton.IsEnabled = hasAddress && hasSelection;
-                PrintAddressButton.IsEnabled = hasAddress && hasSelection;
-
-                // Визуальная индикация
-                AddAddressButton.Opacity = AddAddressButton.IsEnabled ? 1.0 : 0.5;
-                EditAddressButton.Opacity = EditAddressButton.IsEnabled ? 1.0 : 0.5;
-                DeleteAddressButton.Opacity = DeleteAddressButton.IsEnabled ? 1.0 : 0.5;
-                ViewAddressButton.Opacity = ViewAddressButton.IsEnabled ? 1.0 : 0.5;
-                PrintAddressButton.Opacity = PrintAddressButton.IsEnabled ? 1.0 : 0.5;
             }
             catch (Exception ex)
             {
@@ -211,7 +183,45 @@ namespace DrivingSchool.Views
 
         private void AddressGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Если выбран адрес - находим студента
+            if (AddressGrid.SelectedItem is StudentRegistrationAddress selectedAddress)
+            {
+                var student = _students?.Students?.FirstOrDefault(s => s.Id == selectedAddress.StudentId);
+                if (student != null)
+                {
+                    _selectedStudent = student;
+                    UpdateSelectedStudentPanel();
+                    ApplyFilter();
+                }
+            }
             UpdateButtonsAvailability();
+        }
+
+        // Клик по пустому месту для сброса выбора
+        private void AddressGrid_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(AddressGrid, e.GetPosition(AddressGrid));
+            var row = FindVisualParent<DataGridRow>(hit?.VisualHit as System.Windows.DependencyObject);
+
+            if (row == null)
+            {
+                _selectedStudent = null;
+                SelectedStudentPanel.Visibility = Visibility.Collapsed;
+                AddressGrid.SelectedItem = null;
+                ApplyFilter();
+                e.Handled = true;
+            }
+        }
+
+        private T FindVisualParent<T>(System.Windows.DependencyObject child) where T : System.Windows.DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+            }
+            return null;
         }
 
         private void AddAddress_Click(object sender, RoutedEventArgs e)
@@ -225,33 +235,19 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Добавление адреса для студента ID={_selectedStudent.Id}");
-
                 var dialog = new AddressEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
                     _addresses = _dataService.LoadAddresses() ?? new StudentRegistrationAddressCollection { Addresses = new List<StudentRegistrationAddress>() };
-
-                    Debug.WriteLine($"После перезагрузки адресов: {_addresses.Addresses.Count}");
-
                     ApplyFilter();
-
                     MessageBox.Show("Адрес регистрации успешно добавлен!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    Debug.WriteLine("Диалог закрыт с Cancel");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при добавлении: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -275,27 +271,19 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Редактирование адреса ID={selectedAddress.Id}");
-
                 var dialog = new AddressEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedAddress);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после сохранения
                     _addresses = _dataService.LoadAddresses() ?? new StudentRegistrationAddressCollection { Addresses = new List<StudentRegistrationAddress>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Адрес регистрации успешно обновлен!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при редактировании: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -322,21 +310,14 @@ namespace DrivingSchool.Views
             {
                 try
                 {
-                    Debug.WriteLine($"Удаление адреса ID={selectedAddress.Id}");
-
                     _dataService.DeleteAddressData(selectedAddress.Id);
-
-                    // ИСПРАВЛЕНИЕ: перезагружаем данные после удаления
                     _addresses = _dataService.LoadAddresses() ?? new StudentRegistrationAddressCollection { Addresses = new List<StudentRegistrationAddress>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Адрес регистрации удален.", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"ОШИБКА при удалении: {ex.Message}");
                     MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -367,32 +348,11 @@ namespace DrivingSchool.Views
                 $"Город: {selectedAddress.City}\n" +
                 $"Улица: {selectedAddress.Street}\n" +
                 $"Дом: {selectedAddress.House}\n" +
-                $"Корпус: {selectedAddress.Building}\n" +
-                $"Квартира: {selectedAddress.Apartment}\n" +
-                $"Почтовый индекс: {selectedAddress.PostalCode}",
+                $"Корпус: {selectedAddress.Building ?? "не указан"}\n" +
+                $"Квартира: {selectedAddress.Apartment ?? "не указана"}",
                 "Просмотр адреса регистрации",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
-        }
-
-        private void PrintAddress_Click(object sender, RoutedEventArgs e)
-        {
-            if (!(AddressGrid.SelectedItem is StudentRegistrationAddress selectedAddress))
-            {
-                MessageBox.Show("Выберите запись для печати", "Предупреждение",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (_selectedStudent == null)
-            {
-                MessageBox.Show("Выберите студента", "Предупреждение",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            MessageBox.Show($"Печать адреса регистрации:\n\n{selectedAddress.FullAddress}", "Печать",
-                MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void ClearSearch_Click(object sender, RoutedEventArgs e)
@@ -401,7 +361,6 @@ namespace DrivingSchool.Views
             SearchResultsListBox.Visibility = Visibility.Collapsed;
         }
 
-        // НОВЫЙ МЕТОД: очистка выбранного студента
         private void ClearSelectedStudent_Click(object sender, RoutedEventArgs e)
         {
             _selectedStudent = null;
@@ -411,9 +370,22 @@ namespace DrivingSchool.Views
 
         private void AddressGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (AddressGrid.SelectedItem != null && _selectedStudent != null)
+            if (AddressGrid.SelectedItem is StudentRegistrationAddress selectedAddress)
             {
-                EditAddress_Click(sender, e);
+                if (_selectedStudent == null || _selectedStudent.Id != selectedAddress.StudentId)
+                {
+                    _selectedStudent = _students?.Students?.FirstOrDefault(s => s.Id == selectedAddress.StudentId);
+                    if (_selectedStudent != null)
+                    {
+                        UpdateSelectedStudentPanel();
+                        ApplyFilter();
+                    }
+                }
+
+                if (_selectedStudent != null)
+                {
+                    EditAddress_Click(sender, e);
+                }
             }
         }
     }

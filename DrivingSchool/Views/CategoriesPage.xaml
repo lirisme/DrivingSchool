@@ -57,7 +57,6 @@
                   Margin="0,0,0,10">
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
                 <DataGridTextColumn Header="Код" Binding="{Binding Code}" Width="100"/>
                 <DataGridTextColumn Header="Название категории" Binding="{Binding FullName}" Width="*"/>
             </DataGrid.Columns>

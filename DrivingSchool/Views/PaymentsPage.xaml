@@ -7,21 +7,13 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <!-- 0: Заголовок -->
             <RowDefinition Height="Auto"/>
-            <!-- 1: Панель поиска -->
             <RowDefinition Height="Auto"/>
-            <!-- 2: Результаты поиска + Выбранный студент -->
             <RowDefinition Height="Auto"/>
-            <!-- 3: Информация о стоимости обучения -->
             <RowDefinition Height="Auto"/>
-            <!-- 4: Прогресс бар -->
             <RowDefinition Height="Auto"/>
-            <!-- 5: Панель кнопок -->
             <RowDefinition Height="*"/>
-            <!-- 6: Таблица -->
             <RowDefinition Height="Auto"/>
-            <!-- 7: Инфо панель -->
         </Grid.RowDefinitions>
 
         <!-- Заголовок -->
@@ -43,7 +35,6 @@
                     Margin="5,0,0,0"
                     ToolTip="Очистить поиск"/>
 
-            <!-- Кнопка сброса выбора студента -->
             <Button x:Name="ClearSelectedStudentButton" 
                     Content="❌ Сбросить выбор" 
                     Width="120" Height="30" 
@@ -61,7 +52,6 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Результаты поиска -->
             <ListBox x:Name="SearchResultsListBox" 
                      Grid.Row="0"
                      MaxHeight="150"
@@ -71,7 +61,6 @@
                      SelectionChanged="SearchResultsListBox_SelectionChanged"
                      Background="White" BorderBrush="#CCCCCC"/>
 
-            <!-- Выбранный студент -->
             <Border x:Name="SelectedStudentPanel" 
                     Grid.Row="1"
                     Background="#E3F2FD" 
@@ -133,7 +122,6 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Статус и суммы -->
                 <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,5">
                     <TextBlock x:Name="PaidAmountText" Text="Оплачено: 0 руб." FontWeight="Bold" Foreground="#4CAF50" Margin="0,0,20,0"/>
                     <TextBlock x:Name="RemainingAmountText" Text="Остаток: 0 руб." FontWeight="Bold" Foreground="#F44336" Margin="0,0,20,0"/>
@@ -143,7 +131,6 @@
 
                 <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ProgressText" Text="0%" FontWeight="Bold" FontSize="14" Foreground="#666"/>
 
-                <!-- Прогресс бар -->
                 <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" 
                            x:Name="PaymentProgressBar"
                            Height="25" 
@@ -157,7 +144,7 @@
             </Grid>
         </Border>
 
-        <!-- Панель кнопок для работы с платежами -->
+        <!-- Панель кнопок -->
         <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,0,0,10" HorizontalAlignment="Right">
             <Button x:Name="AddPaymentButton" 
                     Content="➕ Добавить платеж" 
@@ -196,14 +183,33 @@
                   SelectionMode="Single"
                   SelectionChanged="PaymentsGrid_SelectionChanged"
                   MouseDoubleClick="PaymentsGrid_MouseDoubleClick"
+                  PreviewMouseLeftButtonDown="PaymentsGrid_PreviewMouseLeftButtonDown"
                   Margin="0,0,0,10">
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
-                <DataGridTextColumn Header="Дата" Binding="{Binding PaymentDate, StringFormat={}{0:dd.MM.yyyy HH:mm}}" Width="120"/>
-                <DataGridTextColumn Header="Сумма" Binding="{Binding Amount, StringFormat={}{0:N2} руб.}" Width="120"/>
+                <DataGridTextColumn Header="Дата" Binding="{Binding PaymentDate, StringFormat={}{0:dd.MM.yyyy HH:mm}}" Width="140"/>
+
+                <!-- Колонка суммы с цветом для отрицательных значений -->
+                <DataGridTextColumn Header="Сумма" Width="120">
+                    <DataGridTextColumn.Binding>
+                        <Binding Path="Amount" StringFormat="{}{0:N2} руб."/>
+                    </DataGridTextColumn.Binding>
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Amount}" Value="0">
+                                    <Setter Property="Foreground" Value="Gray"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Amount}" Value="0">
+                                    <Setter Property="Foreground" Value="Red"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
                 <DataGridTextColumn Header="Тип платежа" Binding="{Binding PaymentType}" Width="150"/>
-                <DataGridTextColumn Header="Дата создания" Binding="{Binding CreatedDate, StringFormat={}{0:dd.MM.yyyy HH:mm}}" Width="120"/>
+                <DataGridTextColumn Header="Дата создания" Binding="{Binding CreatedDate, StringFormat={}{0:dd.MM.yyyy HH:mm}}" Width="140"/>
             </DataGrid.Columns>
         </DataGrid>
 

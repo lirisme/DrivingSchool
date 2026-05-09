@@ -10,17 +10,17 @@ namespace DrivingSchool.Models
         public string LicensePlate { get; set; }
         public int Year { get; set; }
         public string Color { get; set; }
-        public string Category { get; set; }
+        public string Category { get; set; }  // Строковое поле, а не CategoryId
         public string VIN { get; set; }
         public int InstructorId { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
         public DateTime? ModifiedDate { get; set; }
 
-        // Для отображения
         public string DisplayText => $"{Brand} {Model} ({LicensePlate})";
         public string FullInfo => $"{Brand} {Model}, {Year} г., {Color}, {LicensePlate}";
         public string InstructorName { get; set; }
+        public string CategoryFullName => Category ?? "Не указана";
     }
 
     public class CarCollection

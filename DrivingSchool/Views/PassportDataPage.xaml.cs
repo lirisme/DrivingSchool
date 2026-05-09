@@ -168,7 +168,7 @@ namespace DrivingSchool.Views
             {
                 SelectedStudentPanel.Visibility = Visibility.Visible;
                 SelectedStudentText.Text = _selectedStudent.FullName;
-                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone} | ID: {_selectedStudent.Id}";
+                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone}";  // Убрал "| ID: ..."
             }
             else
             {
@@ -180,10 +180,18 @@ namespace DrivingSchool.Views
         {
             try
             {
-                var hasStudent = _selectedStudent != null;
+                // Если есть выбранный паспорт, но _selectedStudent не установлен - находим студента
+                if (PassportGrid.SelectedItem is StudentPassportData selectedPassport && _selectedStudent == null)
+                {
+                    _selectedStudent = _students?.Students?.FirstOrDefault(s => s.Id == selectedPassport.StudentId);
+                    if (_selectedStudent != null)
+                    {
+                        UpdateSelectedStudentPanel();
+                    }
+                }
 
-                // Проверяем наличие паспортных данных для выбранного студента
-                var hasPassportData = hasStudent && _passports.Passports.Any(p => p.StudentId == _selectedStudent.Id);
+                var hasStudent = _selectedStudent != null;
+                var hasPassportData = hasStudent && _passports.Passports.Any(p => p.StudentId == _selectedStudent?.Id);
                 var hasSelection = PassportGrid.SelectedItem != null;
 
                 Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasPassportData={hasPassportData}, hasSelection={hasSelection}");
@@ -205,8 +213,52 @@ namespace DrivingSchool.Views
             }
         }
 
+        private void PassportGrid_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            // Проверяем, кликнули ли по строке DataGrid
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(PassportGrid, e.GetPosition(PassportGrid));
+            var row = FindVisualParent<DataGridRow>(hit?.VisualHit as DependencyObject);
+
+            if (row == null)
+            {
+                // Клик по пустому месту - снимаем выделение студента
+                _selectedStudent = null;
+                SelectedStudentPanel.Visibility = Visibility.Collapsed;
+                PassportGrid.SelectedItem = null;
+                ApplyFilter();
+                UpdateButtonsAvailability();
+                InfoTextBlock.Text = "Выберите студента для работы с паспортными данными";
+                e.Handled = true;
+            }
+        }
+
+        private T FindVisualParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+            }
+            return null;
+        }
+
         private void PassportGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Если выбран паспорт
+            if (PassportGrid.SelectedItem is StudentPassportData selectedPassport)
+            {
+                var student = _students?.Students?.FirstOrDefault(s => s.Id == selectedPassport.StudentId);
+                if (student != null)
+                {
+                    _selectedStudent = student;
+                    UpdateSelectedStudentPanel();
+                    ApplyFilter();
+                }
+            }
+            // Если выделение снято, НО НЕ СБРАСЫВАЕМ СТУДЕНТА здесь
+            // Сброс происходит только при клике по пустому месту
+
             UpdateButtonsAvailability();
         }
 
@@ -221,33 +273,20 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Добавление паспорта для студента ID={_selectedStudent.Id}");
-
-                var dialog = new PassportEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
+                var dialog = new PassportEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName,
+                                                    _selectedStudent.BirthDate, _selectedStudent.Age);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // Принудительно перезагружаем паспортные данные
-                    _passports = _dataService.LoadPassportData() ?? new StudentPassportDataCollection { Passports = new List<StudentPassportData>() };
-
-                    Debug.WriteLine($"После перезагрузки паспортов: {_passports.Passports.Count}");
-
+                    _passports = _dataService.LoadPassportData();
                     ApplyFilter();
-
-                    MessageBox.Show("Паспортные данные успешно добавлены!", "Успех",
+                    MessageBox.Show("Документ успешно добавлен!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    Debug.WriteLine("Диалог закрыт с Cancel");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при добавлении: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -271,27 +310,20 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Редактирование паспорта ID={selectedPassport.Id}");
-
-                var dialog = new PassportEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedPassport);
+                var dialog = new PassportEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName,
+                                                    _selectedStudent.BirthDate, _selectedStudent.Age, selectedPassport);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // Принудительно перезагружаем паспортные данные
-                    _passports = _dataService.LoadPassportData() ?? new StudentPassportDataCollection { Passports = new List<StudentPassportData>() };
-
+                    _passports = _dataService.LoadPassportData();
                     ApplyFilter();
-
-                    MessageBox.Show("Паспортные данные успешно обновлены!", "Успех",
+                    MessageBox.Show("Документ успешно обновлен!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при редактировании: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -384,8 +416,18 @@ namespace DrivingSchool.Views
 
         private void PassportGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (PassportGrid.SelectedItem != null && _selectedStudent != null)
+            if (PassportGrid.SelectedItem is StudentPassportData selectedPassport)
             {
+                // Находим студента
+                var student = _students?.Students?.FirstOrDefault(s => s.Id == selectedPassport.StudentId);
+
+                if (student != null && _selectedStudent == null)
+                {
+                    _selectedStudent = student;
+                    UpdateSelectedStudentPanel();
+                }
+
+                // Открываем редактирование
                 EditPassport_Click(sender, e);
             }
         }

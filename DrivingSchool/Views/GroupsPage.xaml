@@ -16,7 +16,7 @@
         <!-- Заголовок -->
         <TextBlock Grid.Row="0" Text="Учебные группы" FontSize="24" FontWeight="Bold" Margin="0,0,0,10"/>
 
-        <!-- Первый ряд кнопок - поиск и основные операции -->
+        <!-- Первый ряд - поиск и фильтр -->
         <WrapPanel Grid.Row="1" Margin="0,0,0,5">
             <TextBox x:Name="SearchTextBox" 
                      Width="300" Height="30" 
@@ -29,8 +29,17 @@
                     Content="✕" 
                     Width="30" Height="30" 
                     Click="ClearSearch_Click"
-                    Margin="0,0,20,0"
+                    Margin="0,0,10,0"
                     ToolTip="Очистить поиск"/>
+
+            <ComboBox x:Name="StatusFilterComboBox" 
+                      Width="150" Height="30" 
+                      SelectionChanged="StatusFilter_SelectionChanged"
+                      Margin="0,0,10,0">
+                <ComboBoxItem Content="Все группы" IsSelected="True"/>
+                <ComboBoxItem Content="Активные"/>
+                <ComboBoxItem Content="Завершенные"/>
+            </ComboBox>
 
             <Button x:Name="AddGroupButton" 
                     Content="➕ Создать группу" 
@@ -54,10 +63,18 @@
                     Width="100" Height="35" 
                     Background="#f44336" Foreground="White"
                     Margin="0,0,10,0" IsEnabled="False"
-                    ToolTip="Удалить выбранную группу (только если нет студентов)"/>
+                    ToolTip="Удалить выбранную группу"/>
+
+            <Button x:Name="MergeGroupsButton" 
+                    Content="🔄 Объединить выбранные" 
+                    Click="MergeGroups_Click"
+                    Width="160" Height="35" 
+                    Background="#9C27B0" Foreground="White"
+                    IsEnabled="False"
+                    ToolTip="Объединить выбранные группы"/>
         </WrapPanel>
 
-        <!-- Второй ряд кнопок - управление студентами в группе -->
+        <!-- Второй ряд - управление студентами -->
         <WrapPanel Grid.Row="2" Margin="0,0,0,10">
             <TextBlock Text="Управление студентами:" 
                        VerticalAlignment="Center" 
@@ -76,7 +93,7 @@
             <Button x:Name="AddStudentButton" 
                     Content="➕ Добавить студента" 
                     Click="AddStudentToGroup_Click"
-                    Width="150" Height="35" 
+                    Width="160" Height="35" 
                     Background="#FF9800" Foreground="White" 
                     Margin="0,0,10,0" IsEnabled="False"
                     ToolTip="Добавить студента в группу"/>
@@ -84,54 +101,52 @@
             <Button x:Name="RemoveStudentButton" 
                     Content="➖ Удалить студента" 
                     Click="RemoveStudentFromGroup_Click"
-                    Width="150" Height="35" 
+                    Width="160" Height="35" 
                     Background="#FF5722" Foreground="White" 
                     Margin="0,0,10,0" IsEnabled="False"
                     ToolTip="Удалить студента из группы"/>
 
-            <Button x:Name="MergeGroupsButton" 
-                    Content="🔄 Объединить группы" 
-                    Click="MergeGroups_Click"
-                    Width="150" Height="35" 
-                    Background="#9C27B0" Foreground="White"
-                    Margin="0,0,10,0" IsEnabled="False"
-                    ToolTip="Объединить несколько групп в одну (выберите 2+ группы через Ctrl)"/>
-
             <Button x:Name="MoveStudentButton" 
-                    Content="🔄 Переместить" 
+                    Content="🔄 Переместить студента" 
                     Click="MoveStudentToGroup_Click"
-                    Width="120" Height="35" 
+                    Width="180" Height="35" 
                     Background="#00BCD4" Foreground="White" 
                     Margin="0,0,10,0" IsEnabled="False"
                     ToolTip="Переместить студента в другую группу"/>
 
             <Button x:Name="ExportGroupButton" 
-                    Content="📊 Экспорт списка группы" 
+                    Content="📊 Экспорт списка" 
                     Click="ExportGroupButton_Click"
-                    Width="180" Height="35" 
+                    Width="150" Height="35" 
                     Background="#4CAF50" Foreground="White" 
                     IsEnabled="False"
                     ToolTip="Экспорт списка студентов группы в Excel"/>
         </WrapPanel>
 
-        <!-- Таблица с группами -->
+        <!-- Таблица с группами - DataGrid с заголовками -->
         <DataGrid x:Name="GroupsGrid" 
-              Grid.Row="3"
-              AutoGenerateColumns="False"
-              IsReadOnly="True"
-              SelectionMode="Extended"
-              SelectionChanged="GroupsGrid_SelectionChanged"
-              MouseDoubleClick="GroupsGrid_MouseDoubleClick"
-              Margin="0,0,0,10">
+                  Grid.Row="3"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Extended"
+                  SelectionChanged="GroupsGrid_SelectionChanged"
+                  MouseDoubleClick="GroupsGrid_MouseDoubleClick"
+                  Margin="0,0,0,10"
+                  RowBackground="White"
+                  AlternatingRowBackground="#F5F5F5">
+
+            <DataGrid.Resources>
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#2196F3"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="White"/>
+            </DataGrid.Resources>
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
                 <DataGridTextColumn Header="Номер группы" Binding="{Binding Name}" Width="150"/>
-                <DataGridTextColumn Header="Категория" Binding="{Binding Category}" Width="150"/>
+                <DataGridTextColumn Header="Категория" Binding="{Binding Category}" Width="120"/>
                 <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="100"/>
-                <DataGridTextColumn Header="Дата начала" Binding="{Binding StartDate, StringFormat={}{0:dd.MM.yyyy}}" Width="100"/>
-                <DataGridTextColumn Header="Дата окончания" Binding="{Binding EndDate, StringFormat={}{0:dd.MM.yyyy}}" Width="100"/>
-                <DataGridTextColumn Header="Длительность" Binding="{Binding Duration}" Width="150"/>
+                <DataGridTextColumn Header="Дата начала" Binding="{Binding StartDate, StringFormat=dd.MM.yyyy}" Width="110"/>
+                <DataGridTextColumn Header="Дата окончания" Binding="{Binding EndDate, StringFormat=dd.MM.yyyy}" Width="110"/>
+                <DataGridTextColumn Header="Длительность" Binding="{Binding Duration}" Width="130"/>
                 <DataGridTextColumn Header="Студентов" Binding="{Binding StudentCount}" Width="80"/>
             </DataGrid.Columns>
         </DataGrid>
@@ -140,7 +155,7 @@
         <Border Grid.Row="4" Background="#F0F8FF" Padding="10" CornerRadius="5">
             <StackPanel>
                 <TextBlock x:Name="StatusTextBlock" Text="Загрузка..." FontStyle="Italic" Foreground="#666666"/>
-                <TextBlock x:Name="InfoTextBlock" Text="Выберите группу для управления студентами" 
+                <TextBlock x:Name="InfoTextBlock" Text="Кликните на группу для выбора (можно выбрать несколько)" 
                           FontSize="11" Foreground="#888888" Margin="0,5,0,0"/>
             </StackPanel>
         </Border>

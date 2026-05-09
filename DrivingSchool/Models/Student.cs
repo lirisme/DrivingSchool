@@ -20,6 +20,7 @@ namespace DrivingSchool.Models
         public int InstructorId { get; set; }
         public int CarId { get; set; }
 
+
         // НОВЫЕ ПОЛЯ для стоимости обучения
         public decimal TuitionAmount { get; set; } // Полная стоимость
         public decimal DiscountAmount { get; set; } // Сумма скидки

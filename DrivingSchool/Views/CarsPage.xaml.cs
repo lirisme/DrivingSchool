@@ -12,6 +12,7 @@ namespace DrivingSchool.Views
     {
         private readonly SqlDataService _dataService;
         private CarCollection _cars;
+        private EmployeeCollection _employees;
         private List<Car> _filteredCars;
         private bool _showActiveOnly = true;
 
@@ -27,6 +28,7 @@ namespace DrivingSchool.Views
             try
             {
                 _cars = _dataService.LoadCars();
+                _employees = _dataService.LoadEmployees();
                 ApplyFilter();
                 UpdateStatus();
             }
@@ -35,6 +37,7 @@ namespace DrivingSchool.Views
                 MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 _cars = new CarCollection { Cars = new List<Car>() };
+                _employees = new EmployeeCollection { Employees = new List<Employee>() };
                 ApplyFilter();
             }
         }
@@ -51,13 +54,11 @@ namespace DrivingSchool.Views
 
                 var filtered = _cars.Cars.ToList();
 
-                // Фильтр по активности
                 if (_showActiveOnly)
                 {
                     filtered = filtered.Where(c => c.IsActive).ToList();
                 }
 
-                // Поиск по тексту
                 if (!string.IsNullOrWhiteSpace(searchText))
                 {
                     filtered = filtered
@@ -68,11 +69,9 @@ namespace DrivingSchool.Views
                         .ToList();
                 }
 
-                // Загружаем имена инструкторов
-                var employees = _dataService.LoadEmployees();
                 foreach (var car in filtered)
                 {
-                    var instructor = employees.Employees.FirstOrDefault(e => e.Id == car.InstructorId);
+                    var instructor = _employees.Employees.FirstOrDefault(e => e.Id == car.InstructorId);
                     car.InstructorName = instructor != null ? instructor.FullName : "Не назначен";
                 }
 
@@ -91,11 +90,11 @@ namespace DrivingSchool.Views
 
             if (_showActiveOnly)
             {
-                StatusTextBlock.Text = $"Активных автомобилей: {filteredCount} из {totalCount}";
+                StatusTextBlock.Text = $"Активных ТС: {filteredCount} из {totalCount}";
             }
             else
             {
-                StatusTextBlock.Text = $"Всего автомобилей: {totalCount} (активных: {activeCount})";
+                StatusTextBlock.Text = $"Всего ТС: {totalCount} (активных: {activeCount})";
             }
         }
 
@@ -132,7 +131,7 @@ namespace DrivingSchool.Views
                 if (dialog.ShowDialog() == true)
                 {
                     LoadCars();
-                    MessageBox.Show("Автомобиль успешно добавлен!", "Успех",
+                    MessageBox.Show("ТС успешно добавлено!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
@@ -147,7 +146,7 @@ namespace DrivingSchool.Views
         {
             if (!(CarsGrid.SelectedItem is Car selectedCar))
             {
-                MessageBox.Show("Выберите автомобиль для редактирования", "Предупреждение",
+                MessageBox.Show("Выберите ТС для редактирования", "Предупреждение",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -160,7 +159,7 @@ namespace DrivingSchool.Views
                 if (dialog.ShowDialog() == true)
                 {
                     LoadCars();
-                    MessageBox.Show("Автомобиль успешно обновлен!", "Успех",
+                    MessageBox.Show("ТС успешно обновлено!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
@@ -175,14 +174,13 @@ namespace DrivingSchool.Views
         {
             if (!(CarsGrid.SelectedItem is Car selectedCar))
             {
-                MessageBox.Show("Выберите автомобиль для удаления", "Предупреждение",
+                MessageBox.Show("Выберите ТС для удаления", "Предупреждение",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             try
             {
-                // Проверяем, используется ли автомобиль
                 var students = _dataService.LoadStudents();
                 var studentsWithCar = students.Students.Where(s => s.CarId == selectedCar.Id).ToList();
 
@@ -194,13 +192,13 @@ namespace DrivingSchool.Views
                         studentNames += $"\nи ещё {studentsWithCar.Count - 3} студентов";
                     }
 
-                    MessageBox.Show($"Нельзя удалить автомобиль, так как он назначен студентам:\n\n{studentNames}\n\n" +
-                                   "Сначала измените автомобиль у этих студентов.", "Ошибка",
+                    MessageBox.Show($"Нельзя удалить ТС, так как оно назначено студентам:\n\n{studentNames}\n\n" +
+                                   "Сначала измените ТС у этих студентов.", "Ошибка",
                                    MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
-                if (MessageBox.Show($"Удалить автомобиль {selectedCar.Brand} {selectedCar.Model} ({selectedCar.LicensePlate})?",
+                if (MessageBox.Show($"Удалить ТС {selectedCar.Brand} {selectedCar.Model} ({selectedCar.LicensePlate})?",
                     "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     bool deleted = _dataService.DeleteCar(selectedCar.Id);
@@ -208,12 +206,12 @@ namespace DrivingSchool.Views
                     if (deleted)
                     {
                         LoadCars();
-                        MessageBox.Show("Автомобиль удален.", "Успех",
+                        MessageBox.Show("ТС удалено.", "Успех",
                             MessageBoxButton.OK, MessageBoxImage.Information);
                     }
                     else
                     {
-                        MessageBox.Show("Не удалось удалить автомобиль. Возможно, он используется.", "Ошибка",
+                        MessageBox.Show("Не удалось удалить ТС. Возможно, оно используется.", "Ошибка",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }

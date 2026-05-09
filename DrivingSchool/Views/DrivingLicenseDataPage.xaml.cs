@@ -39,7 +39,7 @@ namespace DrivingSchool.Views
                 // Отладка: выводим все загруженные удостоверения
                 foreach (var license in _licenses.Licenses)
                 {
-                    Debug.WriteLine($"  Удостоверение ID={license.Id}, Студент ID={license.StudentId}, Серия={license.Series}, Номер={license.Number}");
+                    Debug.WriteLine($"  Удостоверение ID={license.Id}, Студент ID={license.StudentId}, Номер={license.Number}");
                 }
 
                 ApplyFilter();
@@ -199,24 +199,17 @@ namespace DrivingSchool.Views
                 EditLicenseButton.IsEnabled = hasLicense && hasSelection;
                 DeleteLicenseButton.IsEnabled = hasLicense && hasSelection;
                 ViewLicenseButton.IsEnabled = hasLicense && hasSelection;
-                PrintLicenseButton.IsEnabled = hasLicense && hasSelection;
 
                 // Визуальная индикация
                 AddLicenseButton.Opacity = AddLicenseButton.IsEnabled ? 1.0 : 0.5;
                 EditLicenseButton.Opacity = EditLicenseButton.IsEnabled ? 1.0 : 0.5;
                 DeleteLicenseButton.Opacity = DeleteLicenseButton.IsEnabled ? 1.0 : 0.5;
                 ViewLicenseButton.Opacity = ViewLicenseButton.IsEnabled ? 1.0 : 0.5;
-                PrintLicenseButton.Opacity = PrintLicenseButton.IsEnabled ? 1.0 : 0.5;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"ОШИБКА в UpdateButtonsAvailability: {ex.Message}");
             }
-        }
-
-        private void LicenseGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            UpdateButtonsAvailability();
         }
 
         private void AddLicense_Click(object sender, RoutedEventArgs e)
@@ -370,9 +363,8 @@ namespace DrivingSchool.Views
             MessageBox.Show(
                 $"Водительское удостоверение:\n\n" +
                 $"Студент: {_selectedStudent.FullName}\n" +
-                $"Серия: {selectedLicense.Series}\n" +
                 $"Номер: {selectedLicense.Number}\n" +
-                $"Категории: {selectedLicense.CategoriesDisplay}\n" +
+                $"Категории: {selectedLicense.LicenseCateg}\n" +
                 $"Кем выдано: {selectedLicense.IssuedBy}\n" +
                 $"Код подразделения: {selectedLicense.DivisionCode}\n" +
                 $"Дата выдачи: {selectedLicense.IssueDate:dd.MM.yyyy}\n" +
@@ -383,26 +375,6 @@ namespace DrivingSchool.Views
                 "Просмотр водительского удостоверения",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
-        }
-
-        private void PrintLicense_Click(object sender, RoutedEventArgs e)
-        {
-            if (!(LicenseGrid.SelectedItem is StudentDrivingLicense selectedLicense))
-            {
-                MessageBox.Show("Выберите запись для печати", "Предупреждение",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (_selectedStudent == null)
-            {
-                MessageBox.Show("Выберите студента", "Предупреждение",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            MessageBox.Show($"Печать водительского удостоверения:\n\n{selectedLicense.Series} {selectedLicense.Number}\nСтудент: {_selectedStudent.FullName}", "Печать",
-                MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void ClearSearch_Click(object sender, RoutedEventArgs e)
@@ -421,10 +393,69 @@ namespace DrivingSchool.Views
 
         private void LicenseGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (LicenseGrid.SelectedItem != null && _selectedStudent != null)
+            if (LicenseGrid.SelectedItem is StudentDrivingLicense selectedLicense)
             {
-                EditLicense_Click(sender, e);
+                if (_selectedStudent == null || _selectedStudent.Id != selectedLicense.StudentId)
+                {
+                    _selectedStudent = _students?.Students?.FirstOrDefault(s => s.Id == selectedLicense.StudentId);
+                    if (_selectedStudent != null)
+                    {
+                        UpdateSelectedStudentPanel();
+                        ApplyFilter();
+                    }
+                }
+
+                if (_selectedStudent != null)
+                {
+                    EditLicense_Click(sender, e);
+                }
             }
         }
+
+        private void LicenseGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Если выбран паспорт - находим студента
+            if (LicenseGrid.SelectedItem is StudentDrivingLicense selectedLicense)
+            {
+                var student = _students?.Students?.FirstOrDefault(s => s.Id == selectedLicense.StudentId);
+                if (student != null)
+                {
+                    _selectedStudent = student;
+                    UpdateSelectedStudentPanel();
+                    ApplyFilter(); // Обновляем фильтр для этого студента
+                }
+            }
+
+            UpdateButtonsAvailability();
+        }
+
+        private void LicenseGrid_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(LicenseGrid, e.GetPosition(LicenseGrid));
+            var row = FindVisualParent<DataGridRow>(hit?.VisualHit as System.Windows.DependencyObject);
+
+            if (row == null)
+            {
+                _selectedStudent = null;
+                SelectedStudentPanel.Visibility = Visibility.Collapsed;
+                LicenseGrid.SelectedItem = null;
+                ApplyFilter();
+                UpdateButtonsAvailability();
+                e.Handled = true;
+            }
+        }
+
+        private T FindVisualParent<T>(System.Windows.DependencyObject child) where T : System.Windows.DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+            }
+            return null;
+        }
+
+
     }
 }

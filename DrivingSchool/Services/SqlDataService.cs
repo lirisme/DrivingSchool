@@ -646,10 +646,11 @@ namespace DrivingSchool.Services
                 {
                     conn.Open();
                     var cmd = new SqlCommand(@"
-                        SELECT c.*, e.LastName + ' ' + e.FirstName as InstructorName
-                        FROM Cars c
-                        LEFT JOIN Employees e ON c.InstructorId = e.Id
-                        ORDER BY c.Brand, c.Model", conn);
+                SELECT c.*, 
+                       e.LastName + ' ' + e.FirstName as InstructorName
+                FROM Cars c
+                LEFT JOIN Employees e ON c.InstructorId = e.Id
+                ORDER BY c.Brand, c.Model", conn);
 
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -698,11 +699,12 @@ namespace DrivingSchool.Services
                     if (car.Id > 0)
                     {
                         var cmd = new SqlCommand(@"
-                            UPDATE Cars 
-                            SET Brand = @Brand, Model = @Model, LicensePlate = @LicensePlate,
-                                Year = @Year, Color = @Color, Category = @Category, VIN = @VIN,
-                                InstructorId = @InstructorId, IsActive = @IsActive, ModifiedDate = GETDATE()
-                            WHERE Id = @Id", conn);
+                    UPDATE Cars 
+                    SET Brand = @Brand, Model = @Model, LicensePlate = @LicensePlate,
+                        Year = @Year, Color = @Color, Category = @Category,
+                        VIN = @VIN, InstructorId = @InstructorId, IsActive = @IsActive, 
+                        ModifiedDate = GETDATE()
+                    WHERE Id = @Id", conn);
 
                         cmd.Parameters.AddWithValue("@Id", car.Id);
                         cmd.Parameters.AddWithValue("@Brand", car.Brand);
@@ -721,9 +723,9 @@ namespace DrivingSchool.Services
                     else
                     {
                         var cmd = new SqlCommand(@"
-                            INSERT INTO Cars (Brand, Model, LicensePlate, Year, Color, Category, VIN, InstructorId, IsActive, CreatedDate)
-                            OUTPUT INSERTED.Id
-                            VALUES (@Brand, @Model, @LicensePlate, @Year, @Color, @Category, @VIN, @InstructorId, @IsActive, GETDATE())", conn);
+                    INSERT INTO Cars (Brand, Model, LicensePlate, Year, Color, Category, VIN, InstructorId, IsActive, CreatedDate)
+                    OUTPUT INSERTED.Id
+                    VALUES (@Brand, @Model, @LicensePlate, @Year, @Color, @Category, @VIN, @InstructorId, @IsActive, GETDATE())", conn);
 
                         cmd.Parameters.AddWithValue("@Brand", car.Brand);
                         cmd.Parameters.AddWithValue("@Model", car.Model);
@@ -741,12 +743,12 @@ namespace DrivingSchool.Services
             }
             catch (SqlException ex) when (ex.Number == 2627)
             {
-                throw new Exception("Автомобиль с таким госномером уже существует");
+                throw new Exception("ТС с таким госномером уже существует");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения автомобиля: {ex.Message}");
-                throw new Exception($"Ошибка сохранения автомобиля: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения ТС: {ex.Message}");
+                throw new Exception($"Ошибка сохранения ТС: {ex.Message}");
             }
         }
 
@@ -1955,7 +1957,6 @@ namespace DrivingSchool.Services
                                     House = reader["House"]?.ToString() ?? "",
                                     Building = reader["Building"]?.ToString() ?? "",
                                     Apartment = reader["Apartment"]?.ToString() ?? "",
-                                    PostalCode = reader["PostalCode"]?.ToString() ?? "",
                                     CreatedDate = reader["CreatedDate"] as DateTime? ?? DateTime.Now,
                                     ModifiedDate = reader["ModifiedDate"] as DateTime?,
                                     StudentName = reader["StudentName"]?.ToString() ?? ""
@@ -2005,7 +2006,6 @@ namespace DrivingSchool.Services
                                     House = reader["House"]?.ToString() ?? "",
                                     Building = reader["Building"]?.ToString() ?? "",
                                     Apartment = reader["Apartment"]?.ToString() ?? "",
-                                    PostalCode = reader["PostalCode"]?.ToString() ?? "",
                                     CreatedDate = reader["CreatedDate"] as DateTime? ?? DateTime.Now,
                                     ModifiedDate = reader["ModifiedDate"] as DateTime?,
                                     StudentName = reader["StudentName"]?.ToString() ?? ""
@@ -2039,7 +2039,7 @@ namespace DrivingSchool.Services
                             var cmd = new SqlCommand(@"
                     UPDATE StudentRegistrationAddresses 
                     SET Region = @Region, City = @City, Street = @Street, House = @House,
-                        Building = @Building, Apartment = @Apartment, PostalCode = @PostalCode,
+                        Building = @Building, Apartment = @Apartment,
                         ModifiedDate = GETDATE()
                     WHERE Id = @Id", conn);
 
@@ -2050,7 +2050,6 @@ namespace DrivingSchool.Services
                             cmd.Parameters.AddWithValue("@House", address.House ?? "");
                             cmd.Parameters.AddWithValue("@Building", (object)address.Building ?? DBNull.Value);
                             cmd.Parameters.AddWithValue("@Apartment", (object)address.Apartment ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@PostalCode", (object)address.PostalCode ?? DBNull.Value);
 
                             cmd.ExecuteNonQuery();
                             return address.Id;
@@ -2059,9 +2058,9 @@ namespace DrivingSchool.Services
                         {
                             var cmd = new SqlCommand(@"
                     INSERT INTO StudentRegistrationAddresses 
-                    (StudentId, Region, City, Street, House, Building, Apartment, PostalCode, CreatedDate)
+                    (StudentId, Region, City, Street, House, Building, Apartment, CreatedDate)
                     OUTPUT INSERTED.Id
-                    VALUES (@StudentId, @Region, @City, @Street, @House, @Building, @Apartment, @PostalCode, GETDATE())", conn);
+                    VALUES (@StudentId, @Region, @City, @Street, @House, @Building, @Apartment, GETDATE())", conn);
 
                             cmd.Parameters.AddWithValue("@StudentId", address.StudentId);
                             cmd.Parameters.AddWithValue("@Region", address.Region ?? "");
@@ -2070,7 +2069,6 @@ namespace DrivingSchool.Services
                             cmd.Parameters.AddWithValue("@House", address.House ?? "");
                             cmd.Parameters.AddWithValue("@Building", (object)address.Building ?? DBNull.Value);
                             cmd.Parameters.AddWithValue("@Apartment", (object)address.Apartment ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@PostalCode", (object)address.PostalCode ?? DBNull.Value);
 
                             return (int)cmd.ExecuteScalar();
                         }
@@ -2313,7 +2311,6 @@ namespace DrivingSchool.Services
                                 {
                                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
                                     StudentId = reader.GetInt32(reader.GetOrdinal("StudentId")),
-                                    Series = reader["Series"]?.ToString() ?? "",
                                     Number = reader["Number"]?.ToString() ?? "",
                                     LicenseCateg = reader["LicenseCateg"]?.ToString() ?? "",
                                     IssuedBy = reader["IssuedBy"]?.ToString() ?? "",
@@ -2365,7 +2362,6 @@ namespace DrivingSchool.Services
                                 {
                                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
                                     StudentId = reader.GetInt32(reader.GetOrdinal("StudentId")),
-                                    Series = reader["Series"]?.ToString() ?? "",
                                     Number = reader["Number"]?.ToString() ?? "",
                                     LicenseCateg = reader["LicenseCateg"]?.ToString() ?? "",
                                     IssuedBy = reader["IssuedBy"]?.ToString() ?? "",
@@ -2391,75 +2387,80 @@ namespace DrivingSchool.Services
                 return null;
             }
 
-            /// <summary>
-            /// Сохранение водительского удостоверения
-            /// </summary>
-            public int SaveDrivingLicense(StudentDrivingLicense license)
+        /// <summary>
+        /// Сохранение водительского удостоверения
+        /// </summary>
+        public int SaveDrivingLicense(StudentDrivingLicense license)
+        {
+            try
             {
-                try
+                using (var conn = GetConnection())
                 {
-                    using (var conn = GetConnection())
-                    {
-                        conn.Open();
+                    conn.Open();
 
-                        if (license.Id > 0)
-                        {
-                            var cmd = new SqlCommand(@"
+                    if (license.Id > 0)
+                    {
+                        var cmd = new SqlCommand(@"
                     UPDATE StudentDrivingLicenses 
-                    SET Series = @Series, Number = @Number, LicenseCateg = @LicenseCateg,
+                    SET Number = @Number, LicenseCateg = @LicenseCateg,
                         IssuedBy = @IssuedBy, DivisionCode = @DivisionCode, IssueDate = @IssueDate,
                         ExpiryDate = @ExpiryDate, ExperienceYears = @ExperienceYears, Status = @Status,
                         ModifiedDate = GETDATE()
                     WHERE Id = @Id", conn);
 
-                            cmd.Parameters.AddWithValue("@Id", license.Id);
-                            cmd.Parameters.AddWithValue("@Series", license.Series ?? "");
-                            cmd.Parameters.AddWithValue("@Number", license.Number ?? "");
-                            cmd.Parameters.AddWithValue("@LicenseCateg", (object)license.LicenseCateg ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@IssuedBy", license.IssuedBy ?? "");
-                            cmd.Parameters.AddWithValue("@DivisionCode", (object)license.DivisionCode ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@IssueDate", license.IssueDate);
-                            cmd.Parameters.AddWithValue("@ExpiryDate", license.ExpiryDate);
-                            cmd.Parameters.AddWithValue("@ExperienceYears", license.ExperienceYears);
-                            cmd.Parameters.AddWithValue("@Status", (object)license.Status ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@Id", license.Id);
+                        cmd.Parameters.AddWithValue("@Number", license.Number ?? "");
+                        cmd.Parameters.AddWithValue("@LicenseCateg", (object)license.LicenseCateg ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@IssuedBy", license.IssuedBy ?? "");
+                        cmd.Parameters.AddWithValue("@DivisionCode", (object)license.DivisionCode ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@IssueDate", license.IssueDate);
+                        cmd.Parameters.AddWithValue("@ExpiryDate", license.ExpiryDate);
+                        cmd.Parameters.AddWithValue("@ExperienceYears", license.ExperienceYears);
+                        cmd.Parameters.AddWithValue("@Status", (object)license.Status ?? DBNull.Value);
 
-                            cmd.ExecuteNonQuery();
-                            return license.Id;
-                        }
-                        else
-                        {
-                            var cmd = new SqlCommand(@"
+                        cmd.ExecuteNonQuery();
+                        return license.Id;
+                    }
+                    else
+                    {
+                        var cmd = new SqlCommand(@"
                     INSERT INTO StudentDrivingLicenses 
-                    (StudentId, Series, Number, LicenseCateg, IssuedBy, DivisionCode, IssueDate, ExpiryDate, ExperienceYears, Status, CreatedDate)
+                    (StudentId, Number, LicenseCateg, IssuedBy, DivisionCode, 
+                     IssueDate, ExpiryDate, ExperienceYears, Status, CreatedDate)
                     OUTPUT INSERTED.Id
-                    VALUES (@StudentId, @Series, @Number, @LicenseCateg, @IssuedBy, @DivisionCode, @IssueDate, @ExpiryDate, @ExperienceYears, @Status, GETDATE())", conn);
+                    VALUES 
+                    (@StudentId, @Number, @LicenseCateg, @IssuedBy, @DivisionCode,
+                     @IssueDate, @ExpiryDate, @ExperienceYears, @Status, GETDATE())", conn);
 
-                            cmd.Parameters.AddWithValue("@StudentId", license.StudentId);
-                            cmd.Parameters.AddWithValue("@Series", license.Series ?? "");
-                            cmd.Parameters.AddWithValue("@Number", license.Number ?? "");
-                            cmd.Parameters.AddWithValue("@LicenseCateg", (object)license.LicenseCateg ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@IssuedBy", license.IssuedBy ?? "");
-                            cmd.Parameters.AddWithValue("@DivisionCode", (object)license.DivisionCode ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@IssueDate", license.IssueDate);
-                            cmd.Parameters.AddWithValue("@ExpiryDate", license.ExpiryDate);
-                            cmd.Parameters.AddWithValue("@ExperienceYears", license.ExperienceYears);
-                            cmd.Parameters.AddWithValue("@Status", (object)license.Status ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@StudentId", license.StudentId);
+                        cmd.Parameters.AddWithValue("@Number", license.Number ?? "");
+                        cmd.Parameters.AddWithValue("@LicenseCateg", (object)license.LicenseCateg ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@IssuedBy", license.IssuedBy ?? "");
+                        cmd.Parameters.AddWithValue("@DivisionCode", (object)license.DivisionCode ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@IssueDate", license.IssueDate);
+                        cmd.Parameters.AddWithValue("@ExpiryDate", license.ExpiryDate);
+                        cmd.Parameters.AddWithValue("@ExperienceYears", license.ExperienceYears);
+                        cmd.Parameters.AddWithValue("@Status", (object)license.Status ?? DBNull.Value);
 
-                            return (int)cmd.ExecuteScalar();
-                        }
+                        return (int)cmd.ExecuteScalar();
                     }
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Ошибка сохранения водительского удостоверения: {ex.Message}");
-                    throw new Exception($"Ошибка сохранения водительского удостоверения: {ex.Message}");
-                }
             }
+            catch (SqlException ex) when (ex.Number == 2627)
+            {
+                throw new Exception("Водительское удостоверение с таким номером уже существует");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения водительского удостоверения: {ex.Message}");
+                throw new Exception($"Ошибка сохранения водительского удостоверения: {ex.Message}");
+            }
+        }
 
-            /// <summary>
-            /// Удаление водительского удостоверения
-            /// </summary>
-            public void DeleteDrivingLicense(int licenseId)
+        /// <summary>
+        /// Удаление водительского удостоверения
+        /// </summary>
+        public void DeleteDrivingLicense(int licenseId)
             {
                 try
                 {
@@ -3092,10 +3093,9 @@ namespace DrivingSchool.Services
         }
 
         /// <summary>
-        /// Отмена урока
-        /// </summary>
-        /// <summary>
-        /// Отмена урока (с проверкой на штраф за менее чем 24 часа)
+        /// Отмена урока:
+        /// - Отмена за день и более до урока (DayBefore < 0) -> Отмена без штрафа
+        /// - Отмена в день урока (DayBefore == 0) -> Прогул
         /// </summary>
         public string CancelLesson(int lessonId, DateTime cancelTime)
         {
@@ -3119,20 +3119,18 @@ namespace DrivingSchool.Services
                     if (!reader.Read()) return "Урок не найден";
                     lessonDate = reader.GetDateTime(0);
                     startTime = TimeSpan.Parse(reader[1].ToString());
-                    studentId = reader.GetInt32(2);      // ← Получаем StudentId
-                    instructorId = reader.GetInt32(3);   // ← Получаем InstructorId
+                    studentId = reader.GetInt32(2);
+                    instructorId = reader.GetInt32(3);
                     carId = reader.GetInt32(4);
                     slotId = reader.IsDBNull(5) ? null : (int?)reader.GetInt32(5);
                 }
 
-                // Проверяем, можно ли отменить без штрафа (за 24 часа)
                 var lessonDateTime = lessonDate + startTime;
-                var hoursBefore = (lessonDateTime - cancelTime).TotalHours;
-                bool isWithin24Hours = hoursBefore <= 24;
+                var daysDifference = (lessonDate.Date - cancelTime.Date).Days;
 
-                if (isWithin24Hours)
+                // Если отмена ЗА ДЕНЬ И БОЛЕЕ ДО УРОКА (cancelTime < lessonDate) - без штрафа
+                if (daysDifference > 0)
                 {
-                    // Отмена за 24 часа - без штрафа
                     var updateCmd = new SqlCommand(@"
                 UPDATE DrivingLessons 
                 SET Status = 'Cancelled', CanceledAt = @CancelTime, IsCancelledByStudent = 1
@@ -3141,7 +3139,6 @@ namespace DrivingSchool.Services
                     updateCmd.Parameters.AddWithValue("@CancelTime", cancelTime);
                     updateCmd.ExecuteNonQuery();
 
-                    // Возвращаем слот в доступные
                     if (slotId.HasValue)
                     {
                         var slotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 1 WHERE Id = @SlotId", conn);
@@ -3153,7 +3150,7 @@ namespace DrivingSchool.Services
                 }
                 else
                 {
-                    // Отмена менее чем за 24 часа - урок считается пропущенным
+                    // Отмена В ДЕНЬ УРОКА (день урока или позже) - прогул
                     var updateCmd = new SqlCommand(@"
                 UPDATE DrivingLessons 
                 SET Status = 'NoShow', CanceledAt = @CancelTime, IsCancelledByStudent = 1
@@ -3162,15 +3159,21 @@ namespace DrivingSchool.Services
                     updateCmd.Parameters.AddWithValue("@CancelTime", cancelTime);
                     updateCmd.ExecuteNonQuery();
 
-                    // ✅ ИСПРАВЛЕНО: используем правильный studentId
                     var studentCmd = new SqlCommand(@"
                 UPDATE Students 
                 SET MissedLessons = ISNULL(MissedLessons, 0) + 1
                 WHERE Id = @StudentId", conn);
-                    studentCmd.Parameters.AddWithValue("@StudentId", studentId);  // ← Теперь правильно!
+                    studentCmd.Parameters.AddWithValue("@StudentId", studentId);
                     studentCmd.ExecuteNonQuery();
 
-                    return "Урок засчитан как пропущенный (отмена менее чем за 24 часа)";
+                    if (slotId.HasValue)
+                    {
+                        var slotCmd = new SqlCommand("UPDATE LessonSlots SET IsAvailable = 1 WHERE Id = @SlotId", conn);
+                        slotCmd.Parameters.AddWithValue("@SlotId", slotId.Value);
+                        slotCmd.ExecuteNonQuery();
+                    }
+
+                    return "Урок засчитан как прогул (отмена в день урока)";
                 }
             }
         }
@@ -3933,14 +3936,14 @@ WHERE InstructorId = @InstructorId
             {
                 conn.Open();
                 var cmd = new SqlCommand(@"
-            SELECT ISNULL(vc.LessonsCount, 28) 
+            SELECT ISNULL(t.PracticeHours, 56) 
             FROM Students s
-            LEFT JOIN VehicleCategories vc ON s.CategoryId = vc.Id
+            LEFT JOIN Tariffs t ON s.TariffId = t.Id
             WHERE s.Id = @StudentId", conn);
                 cmd.Parameters.AddWithValue("@StudentId", studentId);
 
                 var result = cmd.ExecuteScalar();
-                int hours = result != null ? Convert.ToInt32(result) : 28;
+                int hours = result != null ? Convert.ToInt32(result) : 56;
 
                 // Делим часы на 2, так как один урок = 2 часа
                 return hours / 2;
@@ -4068,10 +4071,7 @@ WHERE InstructorId = @InstructorId
         }
 
         /// <summary>
-        /// Сброс статуса урока (исправление ошибки)
-        /// </summary>
-        /// <summary>
-        /// Сброс статуса урока (удаление урока, слот становится свободным)
+        /// Сброс статуса урока (исправление ошибки) - работает для любой даты
         /// </summary>
         public void ResetLessonStatus(int lessonId)
         {
@@ -4106,7 +4106,7 @@ WHERE InstructorId = @InstructorId
                             }
                         }
 
-                        // Если урок был проведен или пропущен - откатываем счетчики
+                        // Если урок был проведен - уменьшаем счетчик проведенных уроков
                         if (oldStatus == "Completed")
                         {
                             var studentCmd = new SqlCommand(@"
@@ -4116,6 +4116,7 @@ WHERE InstructorId = @InstructorId
                             studentCmd.Parameters.AddWithValue("@StudentId", studentId);
                             studentCmd.ExecuteNonQuery();
                         }
+                        // Если урок был прогулом - уменьшаем счетчик пропусков
                         else if (oldStatus == "NoShow")
                         {
                             var studentCmd = new SqlCommand(@"
@@ -4126,13 +4127,13 @@ WHERE InstructorId = @InstructorId
                             studentCmd.ExecuteNonQuery();
                         }
 
-                        // Удаляем урок
+                        // Удаляем запись об уроке
                         var deleteCmd = new SqlCommand(@"
                     DELETE FROM DrivingLessons WHERE Id = @LessonId", conn, transaction);
                         deleteCmd.Parameters.AddWithValue("@LessonId", lessonId);
                         deleteCmd.ExecuteNonQuery();
 
-                        // Освобождаем слот (делаем доступным)
+                        // Освобождаем слот
                         if (slotId.HasValue)
                         {
                             var slotCmd = new SqlCommand(@"
@@ -4239,10 +4240,10 @@ WHERE InstructorId = @InstructorId
             {
                 conn.Open();
                 var cmd = new SqlCommand(@"
-            SELECT CONVERT(varchar(5), StartTime, 108) + ' - ' + CONVERT(varchar(5), EndTime, 108) as TimeSlot
+            SELECT CONVERT(varchar(5), StartTime, 108) as StartTime
             FROM LessonSlots 
             WHERE InstructorId = @InstructorId
-            GROUP BY StartTime, EndTime
+            GROUP BY StartTime
             ORDER BY StartTime", conn);
                 cmd.Parameters.AddWithValue("@InstructorId", instructorId);
 
@@ -4250,7 +4251,7 @@ WHERE InstructorId = @InstructorId
                 {
                     while (reader.Read())
                     {
-                        timeSlots.Add(reader["TimeSlot"].ToString());
+                        timeSlots.Add(reader["StartTime"].ToString());
                     }
                 }
             }
@@ -4391,6 +4392,43 @@ WHERE InstructorId = @InstructorId
                         throw;
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Обновить статус выдачи свидетельства у студента
+        /// </summary>
+        public async Task UpdateStudentCertificateStatusAsync(int studentId, bool hasCertificate)
+        {
+            using (var conn = GetConnection())
+            {
+                await conn.OpenAsync();
+                var cmd = new SqlCommand(@"
+            UPDATE Students 
+            SET HasCertificate = @HasCertificate,
+                ModifiedDate = GETDATE()
+            WHERE Id = @StudentId", conn);
+
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+                cmd.Parameters.AddWithValue("@HasCertificate", hasCertificate);
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        /// <summary>
+        /// Проверить наличие свидетельства у студента
+        /// </summary>
+        public async Task<bool> HasCertificateAsync(int studentId)
+        {
+            using (var conn = GetConnection())
+            {
+                await conn.OpenAsync();
+                var cmd = new SqlCommand("SELECT ISNULL(HasCertificate, 0) FROM Students WHERE Id = @StudentId", conn);
+                cmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                var result = await cmd.ExecuteScalarAsync();
+                return result != DBNull.Value && Convert.ToBoolean(result);
             }
         }
 

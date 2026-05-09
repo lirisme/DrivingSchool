@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using DrivingSchool.Models;
 using DrivingSchool.Services;
 
@@ -18,7 +20,7 @@ namespace DrivingSchool.Views
             _dataService = dataService;
             _examService = new ExamService(_dataService.GetConnectionString());
 
-            ExamDatePicker.SelectedDate = DateTime.Now;
+            ExamDatePicker.SelectedDate = DateTime.Now.AddDays(7);
         }
 
         private async void CreateBtn_Click(object sender, RoutedEventArgs e)
@@ -47,21 +49,27 @@ namespace DrivingSchool.Views
                         return;
                 }
 
-                // Определяем тип экзамена
+                // Тип экзамена
                 ExamType type = InternalRadio.IsChecked == true ? ExamType.Internal : ExamType.GIBDD;
 
-                // Убираем этап - по умолчанию теория (значение не важно, так как при создании не делим)
-                // При отметке результатов будет отдельный выбор теории/практики
-                ExamStage stage = ExamStage.Theory; // Значение по умолчанию
+                // Этап экзамена
+                ExamStage stage = TheoryRadio.IsChecked == true ? ExamStage.Theory : ExamStage.Practice;
+
+                // Время по умолчанию 09:00 - 17:00
+                TimeSpan startTime = TimeSpan.FromHours(9);
+                TimeSpan endTime = TimeSpan.FromHours(17);
+
+                // Максимум студентов - большой (не ограничиваем)
+                int maxStudents = 999;
 
                 CreatedSchedule = new ExamSchedule
                 {
                     Type = type,
                     Stage = stage,
                     ExamDate = examDate,
-                    StartTime = TimeSpan.FromHours(9),
-                    EndTime = TimeSpan.FromHours(17),
-                    MaxStudents = 999,
+                    StartTime = startTime,
+                    EndTime = endTime,
+                    MaxStudents = maxStudents,
                     CurrentStudents = 0,
                     ExaminerName = "Не назначен",
                     Location = "Автошкола",
@@ -69,7 +77,15 @@ namespace DrivingSchool.Views
                     IsConducted = false
                 };
 
-                await _examService.CreateExamScheduleAsync(CreatedSchedule);
+                int newId = await _examService.CreateExamScheduleAsync(CreatedSchedule);
+                CreatedSchedule.Id = newId;
+
+                string stageText = stage == ExamStage.Theory ? "теории" : "практики";
+                string typeText = type == ExamType.Internal ? "внутренний" : "ГИБДД";
+
+                MessageBox.Show($"Экзамен по {stageText} ({typeText}) успешно создан!\n" +
+                    $"Дата: {examDate:dd.MM.yyyy}",
+                    "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
 
                 DialogResult = true;
                 Close();
@@ -85,6 +101,20 @@ namespace DrivingSchool.Views
         {
             DialogResult = false;
             Close();
+        }
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                CreateBtn_Click(sender, e);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                CancelBtn_Click(sender, e);
+                e.Handled = true;
+            }
         }
     }
 }

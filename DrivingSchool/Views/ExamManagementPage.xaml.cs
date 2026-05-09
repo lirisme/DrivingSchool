@@ -362,9 +362,9 @@ namespace DrivingSchool.Views
                     return;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Проведение экзамена: Id={schedule.Id}, Type={schedule.Type}");
+                System.Diagnostics.Debug.WriteLine($"Проведение экзамена: Id={schedule.Id}, Type={schedule.Type}, Stage={schedule.Stage}");
 
-                // Получаем студентов, записанных на экзамен (без привязки к этапу)
+                // Получаем студентов, записанных на этот экзамен (с учетом этапа)
                 var registeredStudents = await _examService.GetRegisteredStudentsWithStatusForGeneralExamAsync(schedule.Id, schedule.Type);
 
                 if (!registeredStudents.Any())
@@ -374,21 +374,29 @@ namespace DrivingSchool.Views
                     return;
                 }
 
-                var dialog = new MarkPassedDialog(registeredStudents, schedule.Type); dialog.Owner = Window.GetWindow(this);
+                // Передаем в диалог ТИП и ЭТАП экзамена
+                var dialog = new MarkPassedDialog(registeredStudents, schedule.Type, schedule.Stage);
+                dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
                     int savedCount = 0;
                     int failedCount = 0;
+                    int passedCount = 0;
 
                     foreach (var student in registeredStudents)
                     {
                         try
                         {
-                            // Сохраняем результат по теории
-                            if (student.TheoryEditable)
+                            int attemptNumber = 0;
+                            bool isPassed = false;
+
+                            // В зависимости от этапа экзамена сохраняем результат
+                            if (schedule.Stage == ExamStage.Theory)
                             {
-                                int theoryAttempt = student.TheoryAttempts + 1;
+                                attemptNumber = student.TheoryAttempts + 1;
+                                isPassed = student.ExamPassed;
+
                                 await _examService.SaveExamResultAsync(new ExamRecord
                                 {
                                     StudentId = student.StudentId,
@@ -396,18 +404,18 @@ namespace DrivingSchool.Views
                                     Type = schedule.Type,
                                     Stage = ExamStage.Theory,
                                     ExamDate = DateTime.Now,
-                                    Result = student.TheoryPassed ? ExamResult.Passed : ExamResult.Failed,
-                                    AttemptNumber = theoryAttempt,
+                                    Result = isPassed ? ExamResult.Passed : ExamResult.Failed,
+                                    AttemptNumber = attemptNumber,
                                     ExaminerName = "Экзаменатор",
-                                    Notes = student.TheoryPassed ? "Теория сдана" : "Теория не сдана"
+                                    Notes = isPassed ? "Теория сдана" : "Теория не сдана"
                                 });
-                                System.Diagnostics.Debug.WriteLine($"Студент {student.StudentName}: Теория - {(student.TheoryPassed ? "Сдан" : "Не сдан")}, попытка {theoryAttempt}");
+                                System.Diagnostics.Debug.WriteLine($"Студент {student.StudentName}: Теория - {(isPassed ? "Сдан" : "Не сдан")}, попытка {attemptNumber}");
                             }
-
-                            // Сохраняем результат по практике
-                            if (student.PracticeEditable)
+                            else if (schedule.Stage == ExamStage.Practice)
                             {
-                                int practiceAttempt = student.PracticeAttempts + 1;
+                                attemptNumber = student.PracticeAttempts + 1;
+                                isPassed = student.ExamPassed;
+
                                 await _examService.SaveExamResultAsync(new ExamRecord
                                 {
                                     StudentId = student.StudentId,
@@ -415,13 +423,16 @@ namespace DrivingSchool.Views
                                     Type = schedule.Type,
                                     Stage = ExamStage.Practice,
                                     ExamDate = DateTime.Now,
-                                    Result = student.PracticePassed ? ExamResult.Passed : ExamResult.Failed,
-                                    AttemptNumber = practiceAttempt,
+                                    Result = isPassed ? ExamResult.Passed : ExamResult.Failed,
+                                    AttemptNumber = attemptNumber,
                                     ExaminerName = "Экзаменатор",
-                                    Notes = student.PracticePassed ? "Практика сдана" : "Практика не сдана"
+                                    Notes = isPassed ? "Практика сдана" : "Практика не сдана"
                                 });
-                                System.Diagnostics.Debug.WriteLine($"Студент {student.StudentName}: Практика - {(student.PracticePassed ? "Сдан" : "Не сдан")}, попытка {practiceAttempt}");
+                                System.Diagnostics.Debug.WriteLine($"Студент {student.StudentName}: Практика - {(isPassed ? "Сдан" : "Не сдан")}, попытка {attemptNumber}");
                             }
+
+                            if (isPassed)
+                                passedCount++;
 
                             savedCount++;
                         }
@@ -434,18 +445,18 @@ namespace DrivingSchool.Views
                         }
                     }
 
-                    System.Diagnostics.Debug.WriteLine($"Сохранено: {savedCount}, ошибок: {failedCount}");
+                    System.Diagnostics.Debug.WriteLine($"Сохранено: {savedCount}, ошибок: {failedCount}, сдало: {passedCount}");
 
                     // Отмечаем экзамен как проведенный
                     bool conducted = await _examService.MarkExamAsConductedAsync(schedule.Id);
                     System.Diagnostics.Debug.WriteLine($"Экзамен отмечен как проведенный: {conducted}");
 
-                    var theoryPassedCount = registeredStudents.Count(s => s.TheoryPassed);
-                    var practicePassedCount = registeredStudents.Count(s => s.PracticePassed);
+                    string stageText = schedule.Stage == ExamStage.Theory ? "теорию" : "практику";
+                    string typeText = schedule.Type == ExamType.Internal ? "внутренний" : "ГИБДД";
 
-                    MessageBox.Show($"Экзамен проведен!\n" +
-                        $"Теорию сдало: {theoryPassedCount} из {registeredStudents.Count}\n" +
-                        $"Практику сдало: {practicePassedCount} из {registeredStudents.Count}",
+                    MessageBox.Show($"Экзамен по {stageText} ({typeText}) проведен!\n\n" +
+                        $"Сдало: {passedCount} из {registeredStudents.Count}\n" +
+                        $"Не сдало: {registeredStudents.Count - passedCount}",
                         "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
 
                     await LoadSchedulesAsync();

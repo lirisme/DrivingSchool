@@ -334,7 +334,7 @@ namespace DrivingSchool.Views
                          $"{(medical != null ? $"✅ Мед. справка: {medical.Series} {medical.Number} (до {medical.ValidUntil:dd.MM.yyyy})" : "❌ Мед. справка: не заполнена")}\n" +
                          $"{(address != null ? $"✅ Адрес: {address.FullAddress}" : "❌ Адрес: не заполнен")}\n" +
                          $"{(certificate != null ? $"✅ Свидетельство: {certificate.CertificateSeries} {certificate.CertificateNumber}" : "❌ Свидетельство: не заполнено")}\n" +
-                         $"{(license != null ? $"✅ Вод. удостоверение: {license.Series} {license.Number}" : "❌ Вод. удостоверение: не заполнено")}";
+                         $"{(license != null ? $"✅ Вод. удостоверение: {license.Number}" : "❌ Вод. удостоверение: не заполнено")}";
 
             MessageBox.Show(message, $"Данные учащегося: {selectedStudent.FullName}",
                 MessageBoxButton.OK, MessageBoxImage.Information);
@@ -492,8 +492,8 @@ namespace DrivingSchool.Views
             {
                 case "Passport":
                     var passport = _passports.Passports.FirstOrDefault(p => p.StudentId == student.Id);
-                    var passportDialog = new PassportEditDialog(_dataService, student.Id, student.FullName, passport);
-                    passportDialog.Owner = Window.GetWindow(this);
+                    var passportDialog = new PassportEditDialog(_dataService, student.Id, student.FullName,
+                                                                student.BirthDate, student.Age, passport); passportDialog.Owner = Window.GetWindow(this);
                     if (passportDialog.ShowDialog() == true)
                     {
                         LoadDocuments();
@@ -536,8 +536,8 @@ namespace DrivingSchool.Views
 
                 case "Certificate":
                     var certificate = _certificates.Certificates.FirstOrDefault(c => c.StudentId == student.Id);
-                    var certificateDialog = new CertificateEditDialog(_dataService, student.Id, student.FullName, certificate);
-                    certificateDialog.Owner = Window.GetWindow(this);
+                    var examService = new ExamService(_dataService.GetConnectionString());
+                    var certificateDialog = new CertificateEditDialog(_dataService, examService, student.Id, student.FullName, certificate); certificateDialog.Owner = Window.GetWindow(this);
                     if (certificateDialog.ShowDialog() == true)
                     {
                         LoadDocuments();

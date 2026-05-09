@@ -453,11 +453,13 @@ namespace DrivingSchool.Services
                 -- Внутренние экзамены
                 ISNULL((SELECT TOP 1 1 FROM ExamRecords WHERE StudentId = s.Id AND Type = 0 AND Stage = 0 AND Result = 1), 0) AS InternalTheoryPassed,
                 ISNULL((SELECT TOP 1 1 FROM ExamRecords WHERE StudentId = s.Id AND Type = 0 AND Stage = 1 AND Result = 1), 0) AS InternalPracticePassed,
-                -- Попытки
+                -- Попытки по теории для этого типа экзамена
                 ISNULL((SELECT COUNT(*) FROM ExamRecords WHERE StudentId = s.Id AND Type = @ExamType AND Stage = 0), 0) AS TheoryAttempts,
+                -- Попытки по практике для этого типа экзамена
                 ISNULL((SELECT COUNT(*) FROM ExamRecords WHERE StudentId = s.Id AND Type = @ExamType AND Stage = 1), 0) AS PracticeAttempts,
-                -- Уже сдано в этом типе экзамена
+                -- Уже сдано теории в этом типе экзамена
                 ISNULL((SELECT TOP 1 1 FROM ExamRecords WHERE StudentId = s.Id AND Type = @ExamType AND Stage = 0 AND Result = 1), 0) AS TheoryAlreadyPassed,
+                -- Уже сдано практики в этом типе экзамена
                 ISNULL((SELECT TOP 1 1 FROM ExamRecords WHERE StudentId = s.Id AND Type = @ExamType AND Stage = 1 AND Result = 1), 0) AS PracticeAlreadyPassed
             FROM ExamRegistrations er
             INNER JOIN Students s ON er.StudentId = s.Id
@@ -480,15 +482,17 @@ namespace DrivingSchool.Services
                                 StudentName = reader.GetString(1),
                                 CategoryCode = reader.GetString(2),
                                 Phone = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                                AlreadyPassed = reader.GetInt32(4) == 1,
                                 InternalTheoryPassed = reader.GetInt32(5) == 1,
                                 InternalPracticePassed = reader.GetInt32(6) == 1,
                                 TheoryAttempts = reader.GetInt32(7),
                                 PracticeAttempts = reader.GetInt32(8),
                                 TheoryAlreadyPassed = reader.GetInt32(9) == 1,
                                 PracticeAlreadyPassed = reader.GetInt32(10) == 1,
-                                TheoryPassed = reader.GetInt32(9) == 1,
-                                PracticePassed = reader.GetInt32(10) == 1
+                                // Для совместимости с новой моделью
+                                ExamPassed = (examStage == ExamStage.Theory)
+                                            ? (reader.GetInt32(9) == 1)   // TheoryAlreadyPassed
+                                            : (reader.GetInt32(10) == 1), // PracticeAlreadyPassed
+                                ExamEditable = true
                             };
                             students.Add(student);
                         }
@@ -497,6 +501,76 @@ namespace DrivingSchool.Services
             }
 
             return students;
+        }
+
+        /// <summary>
+        /// Получить статус экзаменов ученика с учетом категории
+        /// </summary>
+        public async Task<StudentExamStatus> GetStudentExamStatusWithCategoryAsync(int studentId, string categoryCode)
+        {
+            var status = new StudentExamStatus();
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                var sql = @"
+            SELECT [Type], [Stage], [Result]
+            FROM ExamRecords
+            WHERE StudentId = @StudentId
+            AND [Result] = 1";
+
+                using (var cmd = new SqlCommand(sql, connection))
+                {
+                    cmd.Parameters.AddWithValue("@StudentId", studentId);
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var examType = (ExamType)reader.GetInt32(reader.GetOrdinal("Type"));
+                            var examStage = (ExamStage)reader.GetInt32(reader.GetOrdinal("Stage"));
+
+                            if (examType == ExamType.Internal && examStage == ExamStage.Theory)
+                                status.InternalTheoryPassed = true;
+                            else if (examType == ExamType.Internal && examStage == ExamStage.Practice)
+                                status.InternalPracticePassed = true;
+                            else if (examType == ExamType.GIBDD && examStage == ExamStage.Theory)
+                                status.GIBDDTheoryPassed = true;
+                            else if (examType == ExamType.GIBDD && examStage == ExamStage.Practice)
+                                status.GIBDDPracticePassed = true;
+                        }
+                    }
+                }
+            }
+
+            return status;
+        }
+
+        /// <summary>
+        /// Проверить, записан ли студент на любой АКТИВНЫЙ (не проведенный) экзамен
+        /// </summary>
+        public async Task<bool> IsStudentSignedUpForAnyExamAsync(int studentId)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                var sql = @"
+            SELECT COUNT(*) 
+            FROM ExamRegistrations er
+            INNER JOIN ExamSchedules es ON er.ScheduleId = es.Id
+            WHERE er.StudentId = @StudentId 
+            AND es.IsConducted = 0
+            AND es.ExamDate >= CAST(GETDATE() AS DATE)";
+
+                using (var cmd = new SqlCommand(sql, connection))
+                {
+                    cmd.Parameters.AddWithValue("@StudentId", studentId);
+                    var count = (int)await cmd.ExecuteScalarAsync();
+                    return count > 0;
+                }
+            }
         }
 
         /// <summary>
@@ -553,10 +627,8 @@ namespace DrivingSchool.Services
                                 PracticeAttempts = reader.GetInt32(7),
                                 TheoryAlreadyPassed = reader.GetInt32(8) == 1,
                                 PracticeAlreadyPassed = reader.GetInt32(9) == 1,
-                                TheoryPassed = reader.GetInt32(8) == 1,
-                                PracticePassed = reader.GetInt32(9) == 1,
-                                TheoryEditable = reader.GetInt32(8) != 1,
-                                PracticeEditable = reader.GetInt32(9) != 1
+                                ExamPassed = false,
+                                ExamEditable = true,
                             };
                             students.Add(student);
                         }
@@ -565,6 +637,32 @@ namespace DrivingSchool.Services
             }
 
             return students;
+        }
+
+        /// <summary>
+        /// Очистить записи студента на будущие экзамены после успешной сдачи
+        /// </summary>
+        public async Task ClearStudentExamRegistrationsAsync(int studentId)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                // Удаляем все будущие записи студента на экзамены
+                var sql = @"
+            DELETE FROM ExamRegistrations 
+            WHERE StudentId = @StudentId 
+            AND ScheduleId IN (
+                SELECT Id FROM ExamSchedules 
+                WHERE ExamDate >= CAST(GETDATE() AS DATE)
+            )";
+
+                using (var cmd = new SqlCommand(sql, connection))
+                {
+                    cmd.Parameters.AddWithValue("@StudentId", studentId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
         }
     }
 }

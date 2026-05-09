@@ -348,7 +348,7 @@ namespace DrivingSchool.Services
                     {
                         StudentName = GetStudentName(license.StudentId),
                         DocumentType = "Водительское удостоверение",
-                        DocumentNumber = $"{license.Series} {license.Number}",
+                        DocumentNumber = license.Number,  // Убрана Series, теперь только Number
                         ExpiryDate = license.ExpiryDate,
                         DaysLeft = daysLeft
                     });

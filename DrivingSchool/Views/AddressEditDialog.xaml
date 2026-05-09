@@ -2,10 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Редактирование адреса регистрации" 
-        Height="544" 
+        Height="550" 
         Width="550"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -24,7 +25,7 @@
         </Grid.RowDefinitions>
 
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="120"/>
+            <ColumnDefinition Width="130"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -39,54 +40,55 @@
                  IsReadOnly="True" Background="#F0F0F0"
                  Margin="0,5" Padding="5"/>
 
-        <!-- Почтовый индекс -->
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="Почтовый индекс:" VerticalAlignment="Center" Margin="0,5"/>
-        <TextBox x:Name="PostalCodeTextBox" Grid.Row="2" Grid.Column="1" 
-                 Text="{Binding PostalCode, UpdateSourceTrigger=PropertyChanged}" 
-                 Margin="0,5" Padding="5" MaxLength="10"/>
-
         <!-- Регион -->
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="Регион:*" VerticalAlignment="Center" Margin="0,5"/>
-        <TextBox x:Name="RegionTextBox" Grid.Row="3" Grid.Column="1" 
-                 Text="{Binding Region, UpdateSourceTrigger=PropertyChanged}" 
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="Регион:*" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="RegionTextBox" Grid.Row="2" Grid.Column="1" 
+                 Text="{Binding Region, UpdateSourceTrigger=PropertyChanged}"
                  Margin="0,5" Padding="5" MaxLength="100"/>
 
-        <!-- Город/населенный пункт -->
-        <TextBlock Grid.Row="4" Grid.Column="0" Text="Город/населенный пункт:*" VerticalAlignment="Center" Margin="0,5"/>
-        <TextBox x:Name="CityTextBox" Grid.Row="4" Grid.Column="1" 
-                 Text="{Binding City, UpdateSourceTrigger=PropertyChanged}" 
+        <!-- Город -->
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Город:*" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="CityTextBox" Grid.Row="3" Grid.Column="1" 
+                 Text="{Binding City, UpdateSourceTrigger=PropertyChanged}"
                  Margin="0,5" Padding="5" MaxLength="100"/>
 
         <!-- Улица -->
-        <TextBlock Grid.Row="5" Grid.Column="0" Text="Улица:*" VerticalAlignment="Center" Margin="0,5"/>
-        <TextBox x:Name="StreetTextBox" Grid.Row="5" Grid.Column="1" 
-                 Text="{Binding Street, UpdateSourceTrigger=PropertyChanged}" 
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="Улица:*" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="StreetTextBox" Grid.Row="4" Grid.Column="1" 
+                 Text="{Binding Street, UpdateSourceTrigger=PropertyChanged}"
                  Margin="0,5" Padding="5" MaxLength="100"/>
 
         <!-- Дом -->
-        <TextBlock Grid.Row="6" Grid.Column="0" Text="Дом:*" VerticalAlignment="Center" Margin="0,5"/>
-        <TextBox x:Name="HouseTextBox" Grid.Row="6" Grid.Column="1" 
-                 Text="{Binding House, UpdateSourceTrigger=PropertyChanged}" 
+        <TextBlock Grid.Row="5" Grid.Column="0" Text="Дом:*" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="HouseTextBox" Grid.Row="5" Grid.Column="1" 
+                 Text="{Binding House, UpdateSourceTrigger=PropertyChanged}"
                  Margin="0,5" Padding="5" MaxLength="20"/>
 
-        <!-- Корпус/строение -->
-        <TextBlock Grid.Row="7" Grid.Column="0" Text="Корпус/строение:" VerticalAlignment="Center" Margin="0,5"/>
-        <TextBox x:Name="BuildingTextBox" Grid.Row="7" Grid.Column="1" 
-                 Text="{Binding Building, UpdateSourceTrigger=PropertyChanged}" 
+        <!-- Корпус -->
+        <TextBlock Grid.Row="6" Grid.Column="0" Text="Корпус:" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="BuildingTextBox" Grid.Row="6" Grid.Column="1" 
+                 Text="{Binding Building, UpdateSourceTrigger=PropertyChanged}"
                  Margin="0,5" Padding="5" MaxLength="20"/>
 
         <!-- Квартира -->
-        <TextBlock Grid.Row="8" Grid.Column="0" Text="Квартира:" VerticalAlignment="Center" Margin="0,5"/>
-        <TextBox x:Name="ApartmentTextBox" Grid.Row="8" Grid.Column="1" 
-                 Text="{Binding Apartment, UpdateSourceTrigger=PropertyChanged}" 
+        <TextBlock Grid.Row="7" Grid.Column="0" Text="Квартира:" VerticalAlignment="Center" Margin="0,5"/>
+        <TextBox x:Name="ApartmentTextBox" Grid.Row="7" Grid.Column="1" 
+                 Text="{Binding Apartment, UpdateSourceTrigger=PropertyChanged}"
                  Margin="0,5" Padding="5" MaxLength="20"/>
 
         <!-- Предпросмотр адреса -->
-        <Border Grid.Row="9" Grid.ColumnSpan="2" Background="#E8F5E8" Padding="10" CornerRadius="5" Margin="0,10">
+        <Border Grid.Row="8" Grid.ColumnSpan="2" Background="#E8F5E8" Padding="10" CornerRadius="5" Margin="0,10">
             <StackPanel>
                 <TextBlock Text="Предпросмотр адреса:" FontWeight="Bold" Margin="0,0,0,5"/>
                 <TextBlock x:Name="PreviewTextBlock" Text="{Binding FullAddress}" TextWrapping="Wrap"/>
             </StackPanel>
+        </Border>
+
+        <!-- Предупреждение -->
+        <Border x:Name="WarningBorder" Grid.Row="9" Grid.ColumnSpan="2" Background="#FFEBEE" Padding="8" CornerRadius="5" Margin="0,0,0,10" Visibility="Collapsed">
+            <TextBlock x:Name="WarningTextBlock" 
+                       Text="" 
+                       Foreground="#C62828" FontSize="11" TextWrapping="Wrap"/>
         </Border>
 
         <!-- Кнопки -->

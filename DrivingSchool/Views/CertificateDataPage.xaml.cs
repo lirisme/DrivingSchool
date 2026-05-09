@@ -56,12 +56,8 @@ namespace DrivingSchool.Views
         {
             try
             {
-                Debug.WriteLine("=== ПРИМЕНЕНИЕ ФИЛЬТРА ===");
-
                 if (_selectedStudent != null)
                 {
-                    Debug.WriteLine($"Выбран студент ID={_selectedStudent.Id}, Name={_selectedStudent.FullName}");
-
                     var filtered = _certificates.Certificates
                         .Where(c => c.StudentId == _selectedStudent.Id)
                         .Select(c =>
@@ -77,14 +73,6 @@ namespace DrivingSchool.Views
                         })
                         .ToList();
 
-                    Debug.WriteLine($"Найдено свидетельств для студента: {filtered.Count}");
-
-                    // Выводим все найденные свидетельства в отладку
-                    foreach (var c in filtered)
-                    {
-                        Debug.WriteLine($"  Свидетельство ID={c.Id}, Серия={c.CertificateSeries}, Номер={c.CertificateNumber}");
-                    }
-
                     CertificateGrid.ItemsSource = filtered;
 
                     if (filtered.Any())
@@ -98,8 +86,6 @@ namespace DrivingSchool.Views
                 }
                 else
                 {
-                    Debug.WriteLine("Студент не выбран, показываем все свидетельства");
-
                     var allCertificates = _certificates.Certificates
                         .Select(c =>
                         {
@@ -185,7 +171,7 @@ namespace DrivingSchool.Views
             {
                 SelectedStudentPanel.Visibility = Visibility.Visible;
                 SelectedStudentText.Text = _selectedStudent.FullName;
-                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone} | ID: {_selectedStudent.Id}";
+                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone}";
             }
             else
             {
@@ -200,23 +186,10 @@ namespace DrivingSchool.Views
                 var hasStudent = _selectedStudent != null;
                 var hasSelection = CertificateGrid.SelectedItem != null;
 
-                Debug.WriteLine($"UpdateButtonsAvailability: hasStudent={hasStudent}, hasSelection={hasSelection}");
-
-                // Для студента можно добавлять сколько угодно сертификатов (разные категории)
-                AddCertificateButton.IsEnabled = hasStudent;  // Всегда доступно, если выбран студент
-
-                // Остальные кнопки доступны только если что-то выбрано
+                AddCertificateButton.IsEnabled = hasStudent;
                 EditCertificateButton.IsEnabled = hasSelection;
                 DeleteCertificateButton.IsEnabled = hasSelection;
                 ViewCertificateButton.IsEnabled = hasSelection;
-                PrintCertificateButton.IsEnabled = hasSelection;
-
-                // Визуальная индикация
-                AddCertificateButton.Opacity = AddCertificateButton.IsEnabled ? 1.0 : 0.5;
-                EditCertificateButton.Opacity = EditCertificateButton.IsEnabled ? 1.0 : 0.5;
-                DeleteCertificateButton.Opacity = DeleteCertificateButton.IsEnabled ? 1.0 : 0.5;
-                ViewCertificateButton.Opacity = ViewCertificateButton.IsEnabled ? 1.0 : 0.5;
-                PrintCertificateButton.Opacity = PrintCertificateButton.IsEnabled ? 1.0 : 0.5;
             }
             catch (Exception ex)
             {
@@ -226,7 +199,45 @@ namespace DrivingSchool.Views
 
         private void CertificateGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Если выбрано свидетельство - находим студента
+            if (CertificateGrid.SelectedItem is StudentCertificate selectedCertificate)
+            {
+                var student = _students?.Students?.FirstOrDefault(s => s.Id == selectedCertificate.StudentId);
+                if (student != null)
+                {
+                    _selectedStudent = student;
+                    UpdateSelectedStudentPanel();
+                    ApplyFilter();
+                }
+            }
             UpdateButtonsAvailability();
+        }
+
+        // Клик по пустому месту для сброса выбора
+        private void CertificateGrid_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(CertificateGrid, e.GetPosition(CertificateGrid));
+            var row = FindVisualParent<DataGridRow>(hit?.VisualHit as System.Windows.DependencyObject);
+
+            if (row == null)
+            {
+                _selectedStudent = null;
+                SelectedStudentPanel.Visibility = Visibility.Collapsed;
+                CertificateGrid.SelectedItem = null;
+                ApplyFilter();
+                e.Handled = true;
+            }
+        }
+
+        private T FindVisualParent<T>(System.Windows.DependencyObject child) where T : System.Windows.DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+            }
+            return null;
         }
 
         private void AddCertificate_Click(object sender, RoutedEventArgs e)
@@ -240,33 +251,22 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Добавление свидетельства для студента ID={_selectedStudent.Id}");
+                // Создаем ExamService
+                var examService = new ExamService(_dataService.GetConnectionString());
 
-                var dialog = new CertificateEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName);
+                var dialog = new CertificateEditDialog(_dataService, examService, _selectedStudent.Id, _selectedStudent.FullName);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // Принудительно перезагружаем свидетельства
                     _certificates = _dataService.LoadCertificates() ?? new StudentCertificateCollection { Certificates = new List<StudentCertificate>() };
-
-                    Debug.WriteLine($"После перезагрузки свидетельств: {_certificates.Certificates.Count}");
-
                     ApplyFilter();
-
                     MessageBox.Show("Свидетельство успешно добавлено!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    Debug.WriteLine("Диалог закрыт с Cancel");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при добавлении: {ex.Message}");
                 MessageBox.Show($"Ошибка при добавлении: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -290,32 +290,26 @@ namespace DrivingSchool.Views
 
             try
             {
-                Debug.WriteLine($"Редактирование свидетельства ID={selectedCertificate.Id}");
+                var examService = new ExamService(_dataService.GetConnectionString());
 
-                var dialog = new CertificateEditDialog(_dataService, _selectedStudent.Id, _selectedStudent.FullName, selectedCertificate);
+                var dialog = new CertificateEditDialog(_dataService, examService, _selectedStudent.Id, _selectedStudent.FullName, selectedCertificate);
                 dialog.Owner = Window.GetWindow(this);
 
                 if (dialog.ShowDialog() == true)
                 {
-                    Debug.WriteLine("Диалог закрыт с OK, перезагружаем данные");
-
-                    // Принудительно перезагружаем свидетельства
                     _certificates = _dataService.LoadCertificates() ?? new StudentCertificateCollection { Certificates = new List<StudentCertificate>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Свидетельство успешно обновлено!", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ОШИБКА при редактировании: {ex.Message}");
                 MessageBox.Show($"Ошибка при редактировании: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
+       
         private void DeleteCertificate_Click(object sender, RoutedEventArgs e)
         {
             if (!(CertificateGrid.SelectedItem is StudentCertificate selectedCertificate))
@@ -337,21 +331,14 @@ namespace DrivingSchool.Views
             {
                 try
                 {
-                    Debug.WriteLine($"Удаление свидетельства ID={selectedCertificate.Id}");
-
                     _dataService.DeleteCertificateData(selectedCertificate.Id);
-
-                    // Принудительно перезагружаем свидетельства
                     _certificates = _dataService.LoadCertificates() ?? new StudentCertificateCollection { Certificates = new List<StudentCertificate>() };
-
                     ApplyFilter();
-
                     MessageBox.Show("Свидетельство удалено.", "Успех",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"ОШИБКА при удалении: {ex.Message}");
                     MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -386,26 +373,6 @@ namespace DrivingSchool.Views
                 MessageBoxImage.Information);
         }
 
-        private void PrintCertificate_Click(object sender, RoutedEventArgs e)
-        {
-            if (!(CertificateGrid.SelectedItem is StudentCertificate selectedCertificate))
-            {
-                MessageBox.Show("Выберите запись для печати", "Предупреждение",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (_selectedStudent == null)
-            {
-                MessageBox.Show("Выберите студента", "Предупреждение",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            MessageBox.Show($"Печать свидетельства:\n\n{selectedCertificate.CertificateSeries} {selectedCertificate.CertificateNumber}\nСтудент: {_selectedStudent.FullName}", "Печать",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
         private void ClearSearch_Click(object sender, RoutedEventArgs e)
         {
             SearchTextBox.Text = string.Empty;
@@ -421,9 +388,22 @@ namespace DrivingSchool.Views
 
         private void CertificateGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (CertificateGrid.SelectedItem != null && _selectedStudent != null)
+            if (CertificateGrid.SelectedItem is StudentCertificate selectedCertificate)
             {
-                EditCertificate_Click(sender, e);
+                if (_selectedStudent == null || _selectedStudent.Id != selectedCertificate.StudentId)
+                {
+                    _selectedStudent = _students?.Students?.FirstOrDefault(s => s.Id == selectedCertificate.StudentId);
+                    if (_selectedStudent != null)
+                    {
+                        UpdateSelectedStudentPanel();
+                        ApplyFilter();
+                    }
+                }
+
+                if (_selectedStudent != null)
+                {
+                    EditCertificate_Click(sender, e);
+                }
             }
         }
     }

@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Controls;
 using DrivingSchool.Models;
 
 namespace DrivingSchool.Views
@@ -14,111 +15,86 @@ namespace DrivingSchool.Views
         public ExamType ExamType { get; private set; }
         public ExamStage ExamStage { get; private set; }
 
-        public MarkPassedDialog(List<StudentExamMark> students, ExamType examType)
+        public MarkPassedDialog(List<StudentExamMark> students, ExamType examType, ExamStage examStage)
         {
             InitializeComponent();
             Students = students;
             ExamType = examType;
+            ExamStage = examStage;
+
+            string stageText = examStage == ExamStage.Theory ? "теорию" : "практику";
+            string typeText = examType == ExamType.Internal ? "внутренний" : "ГИБДД";
+            TitleText.Text = $"Отметьте, кто сдал {stageText} ({typeText} экзамен):";
 
             foreach (var student in students)
             {
-                // 1. Базовые проверки уже сданных экзаменов
-                if (student.TheoryAlreadyPassed)
+                // Проверка: уже сдал этот экзамен ранее
+                if (examStage == ExamStage.Theory && student.TheoryAlreadyPassed)
                 {
-                    student.TheoryPassed = true;
-                    student.TheoryEditable = false;
+                    student.ExamPassed = true;
+                    student.ExamEditable = false;
+                    student.StatusDisplay = "✅ Уже сдан ранее";
                 }
-
-                if (student.PracticeAlreadyPassed)
+                else if (examStage == ExamStage.Practice && student.PracticeAlreadyPassed)
                 {
-                    student.PracticePassed = true;
-                    student.PracticeEditable = false;
-                }
-
-                // 2. Проверки для ГИБДД
-                if (examType == ExamType.GIBDD)
-                {
-                    // Проверка попыток для теории (только если еще не сдана)
-                    if (!student.TheoryAlreadyPassed && student.TheoryAttempts >= 3)
-                    {
-                        student.TheoryEditable = false;
-                    }
-
-                    // Проверка попыток для практики (только если еще не сдана)
-                    if (!student.PracticeAlreadyPassed && student.PracticeAttempts >= 3)
-                    {
-                        student.PracticeEditable = false;
-                    }
-
-                    // Проверка допуска к практике ГИБДД
-                    if (!student.InternalTheoryPassed || !student.InternalPracticePassed)
-                    {
-                        student.PracticeEditable = false;
-                    }
-                }
-
-                // 3. Установка количества попыток для отображения
-                if (examType == ExamType.GIBDD)
-                {
-                    student.AttemptsCount = Math.Max(student.TheoryAttempts, student.PracticeAttempts);
+                    student.ExamPassed = true;
+                    student.ExamEditable = false;
+                    student.StatusDisplay = "✅ Уже сдан ранее";
                 }
                 else
                 {
-                    student.AttemptsCount = student.AttemptsCount; // или другая логика для внутренних экзаменов
+                    // Проверка попыток (максимум 3)
+                    int attempts = examStage == ExamStage.Theory ? student.TheoryAttempts : student.PracticeAttempts;
+                    if (attempts >= 3)
+                    {
+                        student.ExamEditable = false;
+                        student.StatusDisplay = "⚠️ Превышены попытки (3/3), требуется переобучение";
+                    }
+                    else
+                    {
+                        student.StatusDisplay = "Ожидает сдачи";
+                    }
                 }
 
-                // 4. Обновление статуса отображения
-                UpdateStatusDisplay(student);
+                // Для ГИБДД: проверка допуска (сданы внутренние экзамены)
+                if (examType == ExamType.GIBDD)
+                {
+                    if (!student.InternalTheoryPassed)
+                    {
+                        student.ExamEditable = false;
+                        student.StatusDisplay = "❌ Нет допуска: не сдана внутренняя теория";
+                    }
+                    else if (!student.InternalPracticePassed)
+                    {
+                        student.ExamEditable = false;
+                        student.StatusDisplay = "❌ Нет допуска: не сдана внутренняя практика";
+                    }
+                }
+
+                // Установка количества попыток для отображения
+                student.AttemptsCount = examStage == ExamStage.Theory ? student.TheoryAttempts : student.PracticeAttempts;
             }
 
             StudentsGrid.ItemsSource = Students;
 
-            // Отладка: проверка состояния после загрузки
+            // Отладка
             Loaded += (s, e) =>
             {
                 foreach (var student in Students)
                 {
                     System.Diagnostics.Debug.WriteLine($"Студент: {student.StudentName}");
-                    System.Diagnostics.Debug.WriteLine($"  Теория: сдана={student.TheoryPassed}, доступна={student.TheoryEditable}");
-                    System.Diagnostics.Debug.WriteLine($"  Практика: сдана={student.PracticePassed}, доступна={student.PracticeEditable}");
+                    System.Diagnostics.Debug.WriteLine($"  Этап: {examStage}");
+                    System.Diagnostics.Debug.WriteLine($"  Сдан: {student.ExamPassed}, доступен: {student.ExamEditable}");
                     System.Diagnostics.Debug.WriteLine($"  Статус: {student.StatusDisplay}");
                 }
             };
         }
 
-        private void UpdateStatusDisplay(StudentExamMark student)
-        {
-            if (student.TheoryAlreadyPassed && student.PracticeAlreadyPassed)
-                student.StatusDisplay = "✅ Уже сданы оба этапа";
-            else if (student.TheoryAlreadyPassed)
-                student.StatusDisplay = "✅ Теория сдана, нужно сдать практику";
-            else if (student.PracticeAlreadyPassed)
-                student.StatusDisplay = "✅ Практика сдана, нужно сдать теорию";
-            else if (ExamType == ExamType.GIBDD)
-            {
-                if (!student.InternalTheoryPassed)
-                    student.StatusDisplay = "❌ Нет допуска (не сдана внутренняя теория)";
-                else if (!student.InternalPracticePassed)
-                    student.StatusDisplay = "❌ Нет допуска (не сдана внутренняя практика)";
-                else if (student.TheoryAttempts >= 3 && !student.TheoryAlreadyPassed)
-                    student.StatusDisplay = "⚠️ Превышены попытки теории (3/3)";
-                else if (student.PracticeAttempts >= 3 && !student.PracticeAlreadyPassed)
-                    student.StatusDisplay = "⚠️ Превышены попытки практики (3/3)";
-                else
-                    student.StatusDisplay = "Ожидает сдачи";
-            }
-            else
-            {
-                student.StatusDisplay = "Ожидает сдачи";
-            }
-        }
-
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            // Проверяем, что было отмечено
             foreach (var student in Students)
             {
-                System.Diagnostics.Debug.WriteLine($"{student.StudentName}: Теория={student.TheoryPassed}, Практика={student.PracticePassed}");
+                System.Diagnostics.Debug.WriteLine($"{student.StudentName}: Результат={student.ExamPassed}");
             }
 
             DialogResult = true;
@@ -138,246 +114,84 @@ namespace DrivingSchool.Views
         private string _studentName;
         private string _categoryCode;
         private string _phone;
-        private bool _theoryPassed;
-        private bool _practicePassed;
-        private bool _alreadyPassed;
-        private bool _theoryAlreadyPassed;
-        private bool _practiceAlreadyPassed;
-        private bool _theoryEditable = true;
-        private bool _practiceEditable = true;
+        private bool _examPassed;
+        private bool _examEditable = true;
         private int _theoryAttempts;
         private int _practiceAttempts;
         private int _attemptsCount;
         private bool _internalTheoryPassed;
         private bool _internalPracticePassed;
+        private bool _theoryAlreadyPassed;
+        private bool _practiceAlreadyPassed;
         private string _statusDisplay = "Ожидает";
 
         public event PropertyChangedEventHandler PropertyChanged;
-
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        public int StudentId { get => _studentId; set { _studentId = value; OnPropertyChanged(); } }
+        public string StudentName { get => _studentName; set { _studentName = value; OnPropertyChanged(); } }
+        public string CategoryCode { get => _categoryCode; set { _categoryCode = value; OnPropertyChanged(); } }
+        public string Phone { get => _phone; set { _phone = value; OnPropertyChanged(); } }
+
+        public bool ExamPassed
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            get => _examPassed;
+            set { _examPassed = value; OnPropertyChanged(); OnPropertyChanged(nameof(StatusDisplay)); }
         }
 
-        public int StudentId
+        public bool ExamEditable
         {
-            get => _studentId;
-            set
-            {
-                if (_studentId != value)
-                {
-                    _studentId = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public string StudentName
-        {
-            get => _studentName;
-            set
-            {
-                if (_studentName != value)
-                {
-                    _studentName = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public string CategoryCode
-        {
-            get => _categoryCode;
-            set
-            {
-                if (_categoryCode != value)
-                {
-                    _categoryCode = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public string Phone
-        {
-            get => _phone;
-            set
-            {
-                if (_phone != value)
-                {
-                    _phone = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool TheoryPassed
-        {
-            get => _theoryPassed;
-            set
-            {
-                if (_theoryPassed != value)
-                {
-                    _theoryPassed = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool PracticePassed
-        {
-            get => _practicePassed;
-            set
-            {
-                if (_practicePassed != value)
-                {
-                    _practicePassed = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool AlreadyPassed
-        {
-            get => _alreadyPassed;
-            set
-            {
-                if (_alreadyPassed != value)
-                {
-                    _alreadyPassed = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool TheoryAlreadyPassed
-        {
-            get => _theoryAlreadyPassed;
-            set
-            {
-                if (_theoryAlreadyPassed != value)
-                {
-                    _theoryAlreadyPassed = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool PracticeAlreadyPassed
-        {
-            get => _practiceAlreadyPassed;
-            set
-            {
-                if (_practiceAlreadyPassed != value)
-                {
-                    _practiceAlreadyPassed = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool TheoryEditable
-        {
-            get => _theoryEditable;
-            set
-            {
-                if (_theoryEditable != value)
-                {
-                    _theoryEditable = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool PracticeEditable
-        {
-            get => _practiceEditable;
-            set
-            {
-                if (_practiceEditable != value)
-                {
-                    _practiceEditable = value;
-                    OnPropertyChanged();
-                }
-            }
+            get => _examEditable;
+            set { _examEditable = value; OnPropertyChanged(); }
         }
 
         public int TheoryAttempts
         {
             get => _theoryAttempts;
-            set
-            {
-                if (_theoryAttempts != value)
-                {
-                    _theoryAttempts = value;
-                    OnPropertyChanged();
-                }
-            }
+            set { _theoryAttempts = value; OnPropertyChanged(); }
         }
 
         public int PracticeAttempts
         {
             get => _practiceAttempts;
-            set
-            {
-                if (_practiceAttempts != value)
-                {
-                    _practiceAttempts = value;
-                    OnPropertyChanged();
-                }
-            }
+            set { _practiceAttempts = value; OnPropertyChanged(); }
         }
 
         public int AttemptsCount
         {
             get => _attemptsCount;
-            set
-            {
-                if (_attemptsCount != value)
-                {
-                    _attemptsCount = value;
-                    OnPropertyChanged();
-                }
-            }
+            set { _attemptsCount = value; OnPropertyChanged(); }
         }
 
         public bool InternalTheoryPassed
         {
             get => _internalTheoryPassed;
-            set
-            {
-                if (_internalTheoryPassed != value)
-                {
-                    _internalTheoryPassed = value;
-                    OnPropertyChanged();
-                }
-            }
+            set { _internalTheoryPassed = value; OnPropertyChanged(); }
         }
 
         public bool InternalPracticePassed
         {
             get => _internalPracticePassed;
-            set
-            {
-                if (_internalPracticePassed != value)
-                {
-                    _internalPracticePassed = value;
-                    OnPropertyChanged();
-                }
-            }
+            set { _internalPracticePassed = value; OnPropertyChanged(); }
+        }
+
+        public bool TheoryAlreadyPassed
+        {
+            get => _theoryAlreadyPassed;
+            set { _theoryAlreadyPassed = value; OnPropertyChanged(); }
+        }
+
+        public bool PracticeAlreadyPassed
+        {
+            get => _practiceAlreadyPassed;
+            set { _practiceAlreadyPassed = value; OnPropertyChanged(); }
         }
 
         public string StatusDisplay
         {
             get => _statusDisplay;
-            set
-            {
-                if (_statusDisplay != value)
-                {
-                    _statusDisplay = value;
-                    OnPropertyChanged();
-                }
-            }
+            set { _statusDisplay = value; OnPropertyChanged(); }
         }
     }
 }

@@ -120,12 +120,47 @@ namespace DrivingSchool.Views
             {
                 SelectedStudentPanel.Visibility = Visibility.Visible;
                 SelectedStudentText.Text = _selectedStudent.FullName;
-                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone} | ID: {_selectedStudent.Id}";
+                SelectedStudentDetails.Text = $"Телефон: {_selectedStudent.Phone}";  // Убран ID
             }
             else
             {
                 SelectedStudentPanel.Visibility = Visibility.Collapsed;
             }
+        }
+
+        private void PaymentsGrid_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(PaymentsGrid, e.GetPosition(PaymentsGrid));
+            var row = FindVisualParent<DataGridRow>(hit?.VisualHit as System.Windows.DependencyObject);
+
+            if (row == null)
+            {
+                _selectedStudent = null;
+                SelectedStudentPanel.Visibility = Visibility.Collapsed;
+                PaymentsGrid.SelectedItem = null;
+                _payments = null;
+                _tuitionAmount = 0;
+                _discountAmount = 0;
+                _finalAmount = 0;
+                _paidAmount = 0;
+
+                UpdateTuitionInfo();
+                UpdateProgressBar();
+                UpdateTotalAmount();
+                UpdateButtonsAvailability();
+                e.Handled = true;
+            }
+        }
+
+        private T FindVisualParent<T>(System.Windows.DependencyObject child) where T : System.Windows.DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+            }
+            return null;
         }
 
         private void LoadStudentTuitionInfo()
@@ -214,7 +249,6 @@ namespace DrivingSchool.Views
                 OverpaymentText.Visibility = Visibility.Collapsed;
             }
 
-            // Обновляем статус
             if (_finalAmount == 0)
             {
                 StatusText.Text = "Статус: Не указана стоимость обучения";
@@ -278,8 +312,9 @@ namespace DrivingSchool.Views
 
                 PaymentsGrid.ItemsSource = _payments.OrderByDescending(p => p.PaymentDate).ToList();
 
-                // Обновляем общую сумму оплаты
-                _paidAmount = _payments?.Where(p => p.Amount > 0).Sum(p => p.Amount) ?? 0;
+                // ИСПРАВЛЕНИЕ: суммируем ВСЕ платежи (включая отрицательные - возвраты)
+                _paidAmount = _payments?.Sum(p => p.Amount) ?? 0;
+
                 UpdateTuitionInfo();
                 UpdateProgressBar();
                 UpdateTotalAmount();
@@ -299,12 +334,12 @@ namespace DrivingSchool.Views
         {
             if (_selectedStudent != null)
             {
-                var positivePayments = _payments?.Where(p => p.Amount > 0).Sum(p => p.Amount) ?? 0;
-                var negativePayments = _payments?.Where(p => p.Amount < 0).Sum(p => p.Amount) ?? 0;
-                var total = positivePayments + negativePayments;
+                // ИСПРАВЛЕНИЕ: суммируем ВСЕ платежи
+                var total = _payments?.Sum(p => p.Amount) ?? 0;
 
                 TotalAmountText.Text = $"Общая сумма платежей: {total:N2} руб.";
 
+                var negativePayments = _payments?.Where(p => p.Amount < 0).Sum(p => p.Amount) ?? 0;
                 if (negativePayments != 0)
                 {
                     TotalAmountText.Text += $" (включая возвраты: {negativePayments:N2} руб.)";
@@ -319,7 +354,7 @@ namespace DrivingSchool.Views
 
                     var paymentType = lastPayment.Amount > 0 ? "платеж" : "возврат";
                     InfoTextBlock.Text = $"Последний {paymentType}: {lastPayment.PaymentDate:dd.MM.yyyy HH:mm} " +
-                                        $"на сумму {lastPayment.Amount:N2} руб.";
+                                        $"на сумму {Math.Abs(lastPayment.Amount):N2} руб.";
                 }
                 else
                 {

@@ -12,11 +12,9 @@ namespace DrivingSchool.Models
         public string House { get; set; }
         public string Building { get; set; }
         public string Apartment { get; set; }
-        public string PostalCode { get; set; }
         public DateTime CreatedDate { get; set; }
         public DateTime? ModifiedDate { get; set; }
 
-        // Полный адрес
         public string FullAddress
         {
             get
@@ -26,8 +24,6 @@ namespace DrivingSchool.Models
                     address += $", корп.{Building}";
                 if (!string.IsNullOrWhiteSpace(Apartment))
                     address += $", кв.{Apartment}";
-                if (!string.IsNullOrWhiteSpace(PostalCode))
-                    address = $"{PostalCode}, {address}";
                 return address;
             }
         }

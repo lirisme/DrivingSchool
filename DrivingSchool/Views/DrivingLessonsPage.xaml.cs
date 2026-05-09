@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -9,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using DrivingSchool.Models;
 using DrivingSchool.Services;
+using Newtonsoft.Json;
 
 namespace DrivingSchool.Views
 {
@@ -24,17 +24,19 @@ namespace DrivingSchool.Views
         private List<string> _currentTimeSlots = new List<string>();
         private List<Employee> _instructors;
         private Employee _selectedInstructor;
+        private List<NoteItem> _notes = new List<NoteItem>();
+        private int _nextNoteId = 1;
+        private string _notesFilePath;
 
         public DrivingLessonsPage(SqlDataService dataService)
         {
             InitializeComponent();
+            _notesFilePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "waitinglist.json");
+            LoadNotesFromFile();
             _dataService = dataService;
             LoadData();
             LoadInstructors();
-
-            // Автоматически отмечаем прошедшие уроки
             _dataService.AutoCompletePastLessons();
-
             LoadCalendar();
             MonthYearText.Text = _currentDate.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
         }
@@ -81,9 +83,7 @@ namespace DrivingSchool.Views
 
             try
             {
-                // Автоматически отмечаем прошедшие уроки
                 _dataService.AutoCompletePastLessons();
-
                 _dataService.EnsureSlotsExist(_currentDate, _selectedStudent.InstructorId, _selectedStudent.CarId);
 
                 var firstDayOfMonth = new DateTime(_currentDate.Year, _currentDate.Month, 1);
@@ -91,37 +91,34 @@ namespace DrivingSchool.Views
                 var startDate = firstDayOfMonth.AddDays(-daysToSubtract);
                 var endDate = startDate.AddDays(41);
 
-                // Получаем реальные временные слоты из базы
+                // Получаем временные слоты (только время начала)
                 var existingSlots = _dataService.GetInstructorTimeSlots(_selectedStudent.InstructorId);
-                var timeSlots = new List<dynamic>();
+                var timeSlotTimes = new List<string>();
+                var timeSlotStarts = new List<int>();
 
                 foreach (var slot in existingSlots)
                 {
-                    var parts = slot.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length == 2)
-                    {
-                        int hour = int.Parse(parts[0].Split(':')[0]);
-                        timeSlots.Add(new { Time = parts[0], Start = hour });
-                    }
+                    timeSlotTimes.Add(slot);
+                    int hour = int.Parse(slot.Split(':')[0]);
+                    timeSlotStarts.Add(hour);
                 }
 
-                // Если слотов нет, добавляем стандартные
-                if (timeSlots.Count == 0)
+                if (timeSlotTimes.Count == 0)
                 {
-                    timeSlots.Add(new { Time = "09:00", Start = 9 });
-                    timeSlots.Add(new { Time = "11:00", Start = 11 });
-                    timeSlots.Add(new { Time = "13:00", Start = 13 });
-                    timeSlots.Add(new { Time = "15:00", Start = 15 });
-                    timeSlots.Add(new { Time = "17:00", Start = 17 });
+                    timeSlotTimes.Add("09:00");
+                    timeSlotTimes.Add("11:00");
+                    timeSlotTimes.Add("13:00");
+                    timeSlotTimes.Add("15:00");
+                    timeSlotTimes.Add("17:00");
+                    timeSlotStarts.Add(9);
+                    timeSlotStarts.Add(11);
+                    timeSlotStarts.Add(13);
+                    timeSlotStarts.Add(15);
+                    timeSlotStarts.Add(17);
                 }
 
-                // Обновляем панель временных слотов
-                var timeSlotsDisplay = existingSlots.Count > 0 ? existingSlots : new List<string>
-                {
-                    "09:00 - 11:00", "11:00 - 13:00", "13:00 - 15:00", "15:00 - 17:00", "17:00 - 19:00"
-                };
-                TimeSlotsPanel.ItemsSource = timeSlotsDisplay;
-                _currentTimeSlots = timeSlotsDisplay.ToList();
+                TimeSlotsPanel.ItemsSource = timeSlotTimes;
+                _currentTimeSlots = timeSlotTimes;
 
                 var allSlots = _dataService.LoadAllSlots(
                     _selectedStudent.InstructorId,
@@ -130,12 +127,16 @@ namespace DrivingSchool.Views
                     endDate);
 
                 var lessons = _dataService.LoadStudentLessons(_selectedStudent.Id);
+                var examService = new ExamService(_dataService.GetConnectionString());
 
                 var calendar = new List<CalendarRow>();
 
-                foreach (var ts in timeSlots)
+                for (int slotIndex = 0; slotIndex < timeSlotTimes.Count; slotIndex++)
                 {
-                    var row = new CalendarRow { TimeSlot = ts.Time };
+                    var timeSlot = timeSlotTimes[slotIndex];
+                    var startHour = timeSlotStarts[slotIndex];
+
+                    var row = new CalendarRow { TimeSlot = timeSlot };
                     var days = new List<CalendarDay>();
 
                     for (int i = 0; i < 42; i++)
@@ -145,11 +146,11 @@ namespace DrivingSchool.Views
 
                         var slot = allSlots.Slots.FirstOrDefault(s =>
                             s.LessonDate.Date == date.Date &&
-                            s.StartTime.Hours == ts.Start);
+                            s.StartTime.Hours == startHour);
 
                         var studentLesson = lessons.FirstOrDefault(l =>
                             l.LessonDate.Date == date.Date &&
-                            l.StartTime.Hours == ts.Start);
+                            l.StartTime.Hours == startHour);
 
                         bool isSlotExists = slot != null;
                         bool isSlotAvailable = slot?.IsAvailable ?? false;
@@ -335,7 +336,7 @@ namespace DrivingSchool.Views
             var result = MessageBox.Show(
                 $"Удалить отметку с урока на {_selectedSlotData.FullDate:dd.MM.yyyy}?\n\n" +
                 $"Текущий статус: {_selectedSlotData.Status}\n\n" +
-                "Слот станет свободным, урок будет удален из расписания.",
+                "Слот станет свободным, урок можно будет переотметить.",
                 "Исправление ошибки",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -391,8 +392,6 @@ namespace DrivingSchool.Views
                     _dataService.MarkLessonAsCompleted(day.LessonId);
                     MessageBox.Show("Урок отмечен как проведенный", "Успех");
                     LoadCalendar();
-
-                    // Проверяем платежи ПОСЛЕ отметки урока
                     CheckAndHandlePayments();
                 }
                 catch (Exception ex)
@@ -415,8 +414,6 @@ namespace DrivingSchool.Views
                     _dataService.MarkLessonAsNoShow(day.LessonId);
                     MessageBox.Show("Урок отмечен как прогул", "Успех");
                     LoadCalendar();
-
-                    // Проверяем платежи ПОСЛЕ отметки прогула
                     CheckAndHandlePayments();
                 }
                 catch (Exception ex)
@@ -566,11 +563,7 @@ namespace DrivingSchool.Views
             {
                 foreach (var slot in existingSlots)
                 {
-                    var parts = slot.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length == 2)
-                    {
-                        timeCombo.Items.Add(parts[0]);
-                    }
+                    timeCombo.Items.Add(slot);
                 }
             }
             else
@@ -654,11 +647,7 @@ namespace DrivingSchool.Views
             {
                 foreach (var slot in existingSlots)
                 {
-                    var parts = slot.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length == 2)
-                    {
-                        timeCombo.Items.Add(parts[0]);
-                    }
+                    timeCombo.Items.Add(slot);
                 }
             }
             else
@@ -727,19 +716,19 @@ namespace DrivingSchool.Views
         {
             var actions = new List<string>();
 
-            if (day.Status == "Проведен" || day.Status == "Доп. проведен" ||
-                day.Status == "Прогул" || day.Status == "Доп. прогул")
+            actions.Add("Отметить как проведенный");
+            actions.Add("Отметить как прогул");
+            actions.Add("Исправить (снять отметку)");
+
+            if (day.HasActiveBooking)
             {
-                actions.Add("Исправить (снять отметку)");
-            }
-            else if (day.HasActiveBooking)
-            {
-                actions.Add("Отметить как проведенный");
-                actions.Add("Отметить как прогул");
                 actions.Add("Отменить бронь");
             }
 
-            if (actions.Count == 0) return;
+            if (day.CanBook)
+            {
+                actions.Add("Забронировать");
+            }
 
             var combo = new ComboBox();
             foreach (var action in actions)
@@ -758,7 +747,7 @@ namespace DrivingSchool.Views
                 Title = "Управление уроком",
                 Content = stack,
                 Width = 300,
-                Height = 150,
+                Height = 200,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner
             };
 
@@ -779,12 +768,7 @@ namespace DrivingSchool.Views
             {
                 string selectedAction = combo.SelectedItem.ToString();
 
-                if (selectedAction.Contains("Исправить"))
-                {
-                    _selectedSlotData = day;
-                    ResetLesson_Click(this, new RoutedEventArgs());
-                }
-                else if (selectedAction.Contains("проведенный"))
+                if (selectedAction.Contains("проведенный"))
                 {
                     MarkAsCompleted(day);
                 }
@@ -792,9 +776,18 @@ namespace DrivingSchool.Views
                 {
                     MarkAsNoShow(day);
                 }
-                else if (selectedAction.Contains("Отменить"))
+                else if (selectedAction.Contains("Исправить"))
+                {
+                    _selectedSlotData = day;
+                    ResetLesson_Click(this, new RoutedEventArgs());
+                }
+                else if (selectedAction.Contains("Отменить бронь"))
                 {
                     CancelBooking(day);
+                }
+                else if (selectedAction.Contains("Забронировать"))
+                {
+                    BookSlot(day);
                 }
             }
         }
@@ -1474,7 +1467,7 @@ namespace DrivingSchool.Views
             }
         }
 
-        private void LoadInstructorCalendar()
+        private async void LoadInstructorCalendar()
         {
             if (_selectedInstructor == null)
             {
@@ -1499,33 +1492,32 @@ namespace DrivingSchool.Views
                 var endDate = startDate.AddDays(41);
 
                 var existingSlots = _dataService.GetInstructorTimeSlots(_selectedInstructor.Id);
-                var timeSlots = new List<dynamic>();
+                var timeSlotTimes = new List<string>();
+                var timeSlotStarts = new List<int>();
 
                 foreach (var slot in existingSlots)
                 {
-                    var parts = slot.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length == 2)
-                    {
-                        int hour = int.Parse(parts[0].Split(':')[0]);
-                        timeSlots.Add(new { Time = parts[0], Start = hour });
-                    }
+                    timeSlotTimes.Add(slot);
+                    int hour = int.Parse(slot.Split(':')[0]);
+                    timeSlotStarts.Add(hour);
                 }
 
-                if (timeSlots.Count == 0)
+                if (timeSlotTimes.Count == 0)
                 {
-                    timeSlots.Add(new { Time = "09:00", Start = 9 });
-                    timeSlots.Add(new { Time = "11:00", Start = 11 });
-                    timeSlots.Add(new { Time = "13:00", Start = 13 });
-                    timeSlots.Add(new { Time = "15:00", Start = 15 });
-                    timeSlots.Add(new { Time = "17:00", Start = 17 });
+                    timeSlotTimes.Add("09:00");
+                    timeSlotTimes.Add("11:00");
+                    timeSlotTimes.Add("13:00");
+                    timeSlotTimes.Add("15:00");
+                    timeSlotTimes.Add("17:00");
+                    timeSlotStarts.Add(9);
+                    timeSlotStarts.Add(11);
+                    timeSlotStarts.Add(13);
+                    timeSlotStarts.Add(15);
+                    timeSlotStarts.Add(17);
                 }
 
-                var timeSlotsDisplay = existingSlots.Count > 0 ? existingSlots : new List<string>
-                {
-                    "09:00 - 11:00", "11:00 - 13:00", "13:00 - 15:00", "15:00 - 17:00", "17:00 - 19:00"
-                };
-                TimeSlotsPanel.ItemsSource = timeSlotsDisplay;
-                _currentTimeSlots = timeSlotsDisplay.ToList();
+                TimeSlotsPanel.ItemsSource = timeSlotTimes;
+                _currentTimeSlots = timeSlotTimes;
 
                 var allSlots = _dataService.LoadAllSlots(
                     _selectedInstructor.Id,
@@ -1534,12 +1526,16 @@ namespace DrivingSchool.Views
                     endDate);
 
                 var lessons = _dataService.LoadInstructorLessons(_selectedInstructor.Id);
+                var examService = new ExamService(_dataService.GetConnectionString());
 
                 var calendar = new List<CalendarRow>();
 
-                foreach (var ts in timeSlots)
+                for (int slotIndex = 0; slotIndex < timeSlotTimes.Count; slotIndex++)
                 {
-                    var row = new CalendarRow { TimeSlot = ts.Time };
+                    var timeSlot = timeSlotTimes[slotIndex];
+                    var startHour = timeSlotStarts[slotIndex];
+
+                    var row = new CalendarRow { TimeSlot = timeSlot };
                     var days = new List<CalendarDay>();
 
                     for (int i = 0; i < 42; i++)
@@ -1549,11 +1545,11 @@ namespace DrivingSchool.Views
 
                         var slot = allSlots.Slots.FirstOrDefault(s =>
                             s.LessonDate.Date == date.Date &&
-                            s.StartTime.Hours == ts.Start);
+                            s.StartTime.Hours == startHour);
 
                         var lesson = lessons.FirstOrDefault(l =>
                             l.LessonDate.Date == date.Date &&
-                            l.StartTime.Hours == ts.Start);
+                            l.StartTime.Hours == startHour);
 
                         bool isSlotExists = slot != null;
                         bool isSlotAvailable = slot?.IsAvailable ?? false;
@@ -1565,33 +1561,46 @@ namespace DrivingSchool.Views
                         int slotId = slot?.Id ?? 0;
                         int lessonId = lesson?.Id ?? 0;
                         bool isExtra = lesson?.IsExtra ?? false;
+                        string studentName = "";
+                        bool isSignedUpForExam = false;
 
                         if (hasBooking)
                         {
+                            studentName = lesson.StudentName;
+
+                            try
+                            {
+                                isSignedUpForExam = await examService.IsStudentSignedUpForAnyExamAsync(lesson.StudentId);
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Ошибка проверки записи на экзамен: {ex.Message}");
+                            }
+
                             switch (lesson.Status)
                             {
                                 case "Booked":
-                                    status = isExtra ? "Доп. урок" : $"Забронирован ({lesson.StudentName})";
+                                    status = isExtra ? "Доп. урок" : "Забронирован";
                                     statusColor = Brushes.Orange;
                                     canBook = false;
                                     break;
                                 case "Completed":
-                                    status = isExtra ? "Доп. проведен" : $"Проведен ({lesson.StudentName})";
+                                    status = isExtra ? "Доп. проведен" : "Проведен";
                                     statusColor = Brushes.Green;
                                     canBook = false;
                                     break;
                                 case "NoShow":
-                                    status = isExtra ? "Доп. прогул" : $"Прогул ({lesson.StudentName})";
+                                    status = isExtra ? "Доп. прогул" : "Прогул";
                                     statusColor = Brushes.Red;
                                     canBook = false;
                                     break;
                                 case "Cancelled":
-                                    status = isExtra ? "Доп. отменен" : $"Отменен ({lesson.StudentName})";
+                                    status = isExtra ? "Доп. отменен" : "Отменен";
                                     statusColor = Brushes.Gray;
                                     canBook = isSlotAvailable;
                                     break;
                                 default:
-                                    status = isExtra ? "Доп. урок" : $"Забронирован ({lesson.StudentName})";
+                                    status = isExtra ? "Доп. урок" : "Забронирован";
                                     statusColor = Brushes.Orange;
                                     canBook = false;
                                     break;
@@ -1631,7 +1640,9 @@ namespace DrivingSchool.Views
                             CanBook = canBook,
                             HasActiveBooking = hasBooking && lesson?.Status == "Booked",
                             IsExtra = isExtra,
-                            IsSunday = date.DayOfWeek == DayOfWeek.Sunday
+                            IsSunday = date.DayOfWeek == DayOfWeek.Sunday,
+                            StudentName = studentName,
+                            IsSignedUpForExam = isSignedUpForExam
                         };
 
                         days.Add(dayCell);
@@ -1658,35 +1669,39 @@ namespace DrivingSchool.Views
 
             var payments = _dataService.LoadStudentPayments(_selectedStudent.Id);
             var lessons = _dataService.LoadStudentLessons(_selectedStudent.Id);
-            var usedLessons = lessons.Count(l => l.Status == "Completed" || l.Status == "NoShow");
+            var completedLessons = lessons.Count(l => l.Status == "Completed" || l.Status == "NoShow");
+            decimal totalCost = _selectedStudent.FinalAmount;
+            decimal totalPaid = payments.Sum(p => p.Amount);
+            decimal halfCost = totalCost / 2;
 
-            // Проверяем первый платеж (при первом бронировании)
-            if (!payments.Any())
+            if (completedLessons == 0 && totalPaid < halfCost && totalCost > 0)
             {
+                decimal neededAmount = halfCost - totalPaid;
                 var result = MessageBox.Show(
-                    $"Для начала обучения необходимо внести первый платеж.\n\n" +
+                    $"Для начала занятий необходимо оплатить 50% стоимости обучения.\n\n" +
+                    $"Стоимость обучения: {totalCost:N2} руб.\n" +
+                    $"Требуется оплатить до первого занятия: {halfCost:N2} руб.\n" +
+                    $"Оплачено: {totalPaid:N2} руб.\n" +
+                    $"Необходимо доплатить: {neededAmount:N2} руб.\n\n" +
                     $"Перейти к оплате?",
-                    "Первый платеж",
+                    "Требуется оплата",
                     MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                    MessageBoxImage.Warning);
 
                 if (result == MessageBoxResult.Yes)
                 {
-                    NavigateToPaymentPage(0, "Первый платеж");
+                    NavigateToPaymentPage(neededAmount, "Первый платеж (50%)");
                 }
                 return;
             }
 
-            // Проверяем необходимость второго платежа после 10 уроков (включая прогулы)
-            if (usedLessons >= 10 && !_dataService.HasSecondPayment(_selectedStudent.Id))
+            if (completedLessons >= 10 && totalPaid < totalCost)
             {
-                var totalPaid = payments.Sum(p => p.Amount);
-                var remainingAmount = _selectedStudent.FinalAmount - totalPaid;
-
+                decimal remainingAmount = totalCost - totalPaid;
                 if (remainingAmount > 0)
                 {
                     var result = MessageBox.Show(
-                        $"Поздравляем! Вы прошли {usedLessons} уроков вождения.\n\n" +
+                        $"Поздравляем! Вы прошли {completedLessons} уроков вождения.\n\n" +
                         $"Осталось оплатить: {remainingAmount:N2} руб.\n\n" +
                         $"Перейти к оплате?",
                         "Оплата оставшейся суммы",
@@ -1725,7 +1740,120 @@ namespace DrivingSchool.Views
                 MessageBox.Show($"Ошибка при переходе к оплате: {ex.Message}", "Ошибка");
             }
         }
+
+        private void LoadNotesFromFile()
+        {
+            try
+            {
+                if (System.IO.File.Exists(_notesFilePath))
+                {
+                    string json = System.IO.File.ReadAllText(_notesFilePath);
+                    _notes = JsonConvert.DeserializeObject<List<NoteItem>>(json) ?? new List<NoteItem>();
+                    if (_notes.Any())
+                        _nextNoteId = _notes.Max(n => n.Id) + 1;
+                }
+            }
+            catch
+            {
+                _notes = new List<NoteItem>();
+            }
+            UpdateNotesDisplay();
+        }
+
+        private void SaveNotesToFile()
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(_notes);
+                System.IO.File.WriteAllText(_notesFilePath, json);
+            }
+            catch { }
+        }
+
+        private void UpdateNotesDisplay()
+        {
+            NotesList.ItemsSource = null;
+            NotesList.ItemsSource = _notes;
+        }
+
+        private void AddNote_Click(object sender, RoutedEventArgs e)
+        {
+            string name = NewNameTextBox.Text.Trim();
+            string phone = NewPhoneTextBox.Text.Trim();
+            string notes = NewNotesTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                MessageBox.Show("Введите ФИО", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                NewNameTextBox.Focus();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(phone))
+            {
+                MessageBox.Show("Введите телефон", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                NewPhoneTextBox.Focus();
+                return;
+            }
+
+            _notes.Add(new NoteItem
+            {
+                Id = _nextNoteId++,
+                Name = name,
+                Phone = phone,
+                Notes = notes,
+                CreatedDate = DateTime.Now
+            });
+
+            NewNameTextBox.Text = "";
+            NewPhoneTextBox.Text = "";
+            NewNotesTextBox.Text = "";
+
+            UpdateNotesDisplay();
+            SaveNotesToFile();
+            NewNameTextBox.Focus();
+        }
+
+        private void DeleteNote_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            if (button?.Tag == null) return;
+
+            int id = (int)button.Tag;
+            var note = _notes.FirstOrDefault(n => n.Id == id);
+            if (note != null)
+            {
+                _notes.Remove(note);
+                UpdateNotesDisplay();
+                SaveNotesToFile();
+            }
+        }
+
+        private void ClearAllNotes_Click(object sender, RoutedEventArgs e)
+        {
+            if (_notes.Count == 0) return;
+
+            var result = MessageBox.Show($"Удалить все {_notes.Count} записей?",
+                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _notes.Clear();
+                UpdateNotesDisplay();
+                SaveNotesToFile();
+            }
+        }
     }
+
+        // Класс для заметки (добавьте в конец файла)
+        public class NoteItem
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public string Phone { get; set; }
+            public string Notes { get; set; }
+            public DateTime CreatedDate { get; set; }
+        }
 
     public class CalendarRow
     {
@@ -1749,6 +1877,9 @@ namespace DrivingSchool.Views
         public bool CanBook { get; set; }
         public bool IsExtra { get; set; }
         public bool IsSunday { get; set; }
+        public string StudentName { get; set; }
+        public bool IsSignedUpForExam { get; set; }
+        public string ExamSignText => IsSignedUpForExam ? "📝 Записан на экзамен" : null;
 
         public Brush Background
         {
@@ -1756,31 +1887,22 @@ namespace DrivingSchool.Views
             {
                 if (IsSunday && !IsCurrentMonth)
                     return Brushes.LavenderBlush;
-
                 if (IsSunday && IsCurrentMonth && Status == "Свободно")
                     return Brushes.LightCyan;
-
                 if (IsToday && IsCurrentMonth)
                     return Brushes.LightYellow;
-
                 if (!IsCurrentMonth)
                     return Brushes.WhiteSmoke;
-
                 if (Status == "Свободно")
                     return Brushes.LightGreen;
-
                 if (Status == "Забронирован" || Status == "Доп. урок")
                     return Brushes.Orange;
-
                 if (Status == "Проведен" || Status == "Доп. проведен")
                     return Brushes.Green;
-
                 if (Status == "Прогул" || Status == "Доп. прогул")
                     return Brushes.Red;
-
                 if (Status == "Занято")
                     return Brushes.LightCoral;
-
                 return Brushes.LightGray;
             }
         }

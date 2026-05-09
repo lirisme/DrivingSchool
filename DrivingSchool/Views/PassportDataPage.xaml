@@ -88,18 +88,18 @@
                     IsEnabled="False"/>
         </StackPanel>
 
-        <!-- Таблица с паспортными данными -->
+        <!-- Таблица с паспортными данными (без колонки ID) -->
         <DataGrid x:Name="PassportGrid" 
-                  Grid.Row="4"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  SelectionMode="Single"
-                  SelectionChanged="PassportGrid_SelectionChanged"
-                  MouseDoubleClick="PassportGrid_MouseDoubleClick"
-                  Margin="0,0,0,10">
+          Grid.Row="4"
+          AutoGenerateColumns="False"
+          IsReadOnly="True"
+          SelectionMode="Single"
+          SelectionChanged="PassportGrid_SelectionChanged"
+          MouseDoubleClick="PassportGrid_MouseDoubleClick"
+          PreviewMouseLeftButtonDown="PassportGrid_PreviewMouseLeftButtonDown"
+          Margin="0,0,0,10">
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
                 <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="200"/>
                 <DataGridTextColumn Header="Тип документа" Binding="{Binding DocumentType}" Width="150"/>
                 <DataGridTextColumn Header="Серия" Binding="{Binding Series}" Width="80"/>

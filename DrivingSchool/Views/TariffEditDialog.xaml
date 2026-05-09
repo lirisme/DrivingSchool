@@ -2,10 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Редактирование тарифа" 
-        Height="500" 
+        Height="515" 
         Width="550"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -37,21 +38,13 @@
                  Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
                  Margin="0,5" Padding="5" MaxLength="100"/>
 
-        <!-- Категория -->
+        <!-- Категория (из базы данных) -->
         <TextBlock Grid.Row="2" Grid.Column="0" Text="Категория:" VerticalAlignment="Center" Margin="0,5"/>
         <ComboBox x:Name="CategoryComboBox" Grid.Row="2" Grid.Column="1" 
-                  IsEditable="True"
-                  Text="{Binding Category}"
-                  Margin="0,5" Padding="5" Height="30">
-            <ComboBoxItem Content="A"/>
-            <ComboBoxItem Content="B"/>
-            <ComboBoxItem Content="C"/>
-            <ComboBoxItem Content="D"/>
-            <ComboBoxItem Content="BE"/>
-            <ComboBoxItem Content="CE"/>
-            <ComboBoxItem Content="DE"/>
-            <ComboBoxItem Content="M"/>
-        </ComboBox>
+                  DisplayMemberPath="DisplayText" 
+                  SelectedValuePath="Code"
+                  SelectedValue="{Binding Category}"
+                  Margin="0,5" Padding="5" Height="30"/>
 
         <!-- Длительность (месяцев) -->
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Длительность (мес):*" VerticalAlignment="Center" Margin="0,5"/>

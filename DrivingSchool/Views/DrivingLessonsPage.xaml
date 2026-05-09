@@ -97,16 +97,15 @@
             </Border>
 
             <!-- Информация -->
-            <!-- Информация -->
             <Border Background="#F0F8FF" CornerRadius="5" Padding="10" Margin="0,0,10,0">
                 <StackPanel>
                     <TextBlock Text="Информация:" FontWeight="Bold"/>
                     <TextBlock x:Name="LessonsStatsText" FontSize="11" FontWeight="Bold" 
-                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="200"/>
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="200"/>
                     <Button Content="✏️ Ручное бронирование" 
-                Click="ManualBooking_Click"
-                Margin="0,5,0,0"
-                Padding="5"/>
+                            Click="ManualBooking_Click"
+                            Margin="0,5,0,0"
+                            Padding="5"/>
                 </StackPanel>
             </Border>
 
@@ -123,21 +122,21 @@
             </Border>
         </WrapPanel>
 
-        <!-- Календарная сетка с фиксированной временной шкалой -->
+        <!-- Календарная сетка с фиксированной временной шкалой И ЛИСТОМ ОЖИДАНИЯ -->
         <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="300"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Фиксированная временная шкала с кнопкой + -->
+            <!-- Фиксированная временная шкала -->
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Список временных слотов -->
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="TimeSlotsPanel">
                         <ItemsControl.ItemsPanel>
@@ -207,20 +206,27 @@
                                                                   IsEnabled="{Binding CanBook}"/>
                                                         <MenuItem Header="❌ Отменить бронь" Click="CancelBooking_Click"
                                                                   IsEnabled="{Binding HasActiveBooking}"/>
-                                                        <MenuItem Header="✅ Отметить как проведенный" Click="MarkAsCompleted_Click"
-                                                                  IsEnabled="{Binding HasBooking}"/>
-                                                        <MenuItem Header="⚠️ Отметить как прогул" Click="MarkAsNoShow_Click"
-                                                                  IsEnabled="{Binding HasBooking}"/>
+                                                        <MenuItem Header="✅ Отметить как проведенный" Click="MarkAsCompleted_Click"/>
+                                                        <MenuItem Header="⚠️ Отметить как прогул" Click="MarkAsNoShow_Click"/>
                                                         <Separator/>
                                                         <MenuItem Header="✏️ Ручное бронирование" Click="ManualBookingForSlot_Click"/>
                                                     </ContextMenu>
                                                 </Border.ContextMenu>
                                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                    <TextBlock Text="{Binding Date}" 
-                                                               FontSize="12" 
-                                                               HorizontalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding Status}" 
-                                                               FontSize="9" 
+                                                    <TextBlock Text="{Binding Date}" FontSize="12" HorizontalAlignment="Center"/>
+
+                                                    <!-- Имя студента (для инструктора) -->
+                                                    <TextBlock Text="{Binding StudentName}" FontSize="9" 
+                                                               HorizontalAlignment="Center" FontWeight="Bold"
+                                                               Margin="0,2,0,0" TextWrapping="Wrap" TextAlignment="Center"/>
+
+                                                    <!-- Статус записи на экзамен (только если записан) -->
+                                                    <TextBlock Text="{Binding ExamSignText}" FontSize="8" 
+                                                               Foreground="Green"
+                                                               HorizontalAlignment="Center"
+                                                               Margin="0,2,0,0"/>
+
+                                                    <TextBlock Text="{Binding Status}" FontSize="9" 
                                                                HorizontalAlignment="Center"
                                                                Foreground="{Binding StatusColor}"
                                                                Margin="0,3,0,0"
@@ -236,6 +242,77 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
+
+            <!-- ЛИСТ ОЖИДАНИЯ / ЗАМЕТКИ (справа) -->
+            <Border Grid.Column="2" Background="#FFF8E1" CornerRadius="5" Margin="10,0,0,0">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Заголовок -->
+                    <TextBlock Grid.Row="0" Text="📋 Лист ожидания" FontSize="14" FontWeight="Bold" Margin="0,0,0,5"/>
+
+                    <!-- Поля с подписями -->
+                    <StackPanel Grid.Row="1" Margin="0,0,0,5">
+                        <TextBlock Text="ФИО:" FontSize="11" Foreground="Gray" Margin="0,0,0,2"/>
+                        <TextBox x:Name="NewNameTextBox" Width="Auto" Height="30" Padding="5" Margin="0,0,0,3"/>
+
+                        <TextBlock Text="Телефон:" FontSize="11" Foreground="Gray" Margin="0,5,0,2"/>
+                        <TextBox x:Name="NewPhoneTextBox" Width="Auto" Height="30" Padding="5" Margin="0,0,0,3"/>
+
+                        <TextBlock Text="Примечания:" FontSize="11" Foreground="Gray" Margin="0,5,0,2"/>
+                        <TextBox x:Name="NewNotesTextBox" Width="Auto" Height="60" Padding="5" Margin="0,0,0,3" TextWrapping="Wrap" AcceptsReturn="True"/>
+
+                        <Button x:Name="AddNoteButton" Content="➕ Добавить" Click="AddNote_Click" 
+                    Background="#4CAF50" Foreground="White" Height="30" Margin="0,5,0,0"/>
+                    </StackPanel>
+
+                    <!-- Разделитель -->
+                    <Border Grid.Row="2" Height="1" Background="#CCCCCC" Margin="0,5"/>
+
+                    <!-- Список заметок (прокручиваемый) -->
+                    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="0,5">
+                        <ItemsControl x:Name="NotesList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#FFFFFF" CornerRadius="3" Margin="0,0,0,3" Padding="5">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Name}" FontWeight="Bold" Margin="0,0,0,3"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Phone}" FontSize="11" Foreground="Gray" Margin="0,0,0,3"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding Notes}" FontSize="11" TextWrapping="Wrap"/>
+
+                                            <Button Grid.Row="0" Grid.Column="1" Content="✕" Width="25" Height="25" 
+                                        Background="#f44336" Foreground="White" FontWeight="Bold"
+                                        Click="DeleteNote_Click" Tag="{Binding Id}"
+                                        VerticalAlignment="Top"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Кнопка очистить все -->
+                    <Button x:Name="ClearAllButton" Grid.Row="5" Content="🗑️ Очистить все" Click="ClearAllNotes_Click"
+                Background="#f44336" Foreground="White" Height="30" Margin="0,5,0,0"/>
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- Легенда -->
@@ -272,6 +349,10 @@
                 <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
                     <TextBlock Text="💡" FontSize="14" Margin="0,0,5,0"/>
                     <TextBlock Text="ПКМ - действия" FontSize="11" Foreground="Gray"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+                    <TextBlock Text="📋" FontSize="14" Margin="0,0,5,0"/>
+                    <TextBlock Text="Лист ожидания справа" FontSize="11" Foreground="Gray"/>
                 </StackPanel>
             </WrapPanel>
         </Border>

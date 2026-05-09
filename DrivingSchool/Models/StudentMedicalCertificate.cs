@@ -16,18 +16,18 @@ namespace DrivingSchool.Models
         public DateTime CreatedDate { get; set; }
         public DateTime? ModifiedDate { get; set; }
 
-        // Для отображения
         public string FullNumber => $"{Series} {Number}";
         public bool IsValid => ValidUntil >= DateTime.Today;
         public string StudentName { get; set; }
         public string StatusText => IsValid ? "Действительна" : "Просрочена";
+
         public string StatusColor
         {
             get
             {
                 var daysLeft = (ValidUntil - DateTime.Today).Days;
                 if (daysLeft < 0) return "Red";
-                if (daysLeft <= 30) return "Yellow";
+                if (daysLeft <= 30) return "Orange";
                 return "Green";
             }
         }
@@ -37,6 +37,4 @@ namespace DrivingSchool.Models
     {
         public System.Collections.Generic.List<StudentMedicalCertificate> Certificates { get; set; } = new System.Collections.Generic.List<StudentMedicalCertificate>();
     }
-
-
 }

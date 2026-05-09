@@ -108,33 +108,24 @@
                     Width="100" Height="35" 
                     Background="#9C27B0" Foreground="White" 
                     IsEnabled="False"/>
-
-            <Button x:Name="PrintLicenseButton" 
-                    Content="🖨️ Печать" 
-                    Click="PrintLicense_Click"
-                    Width="100" Height="35" 
-                    Background="#607D8B" Foreground="White" 
-                    IsEnabled="False"/>
         </StackPanel>
 
         <!-- Таблица с удостоверениями - Row 4 -->
         <DataGrid x:Name="LicenseGrid" 
-                  Grid.Row="4"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  SelectionMode="Single"
-                  SelectionChanged="LicenseGrid_SelectionChanged"
-                  MouseDoubleClick="LicenseGrid_MouseDoubleClick"
-                  Margin="0,0,0,10">
+          Grid.Row="4"
+          AutoGenerateColumns="False"
+          IsReadOnly="True"
+          SelectionMode="Single"
+          SelectionChanged="LicenseGrid_SelectionChanged"
+          MouseDoubleClick="LicenseGrid_MouseDoubleClick"
+          PreviewMouseLeftButtonDown="LicenseGrid_PreviewMouseLeftButtonDown"
+          Margin="0,0,0,10">
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
-                <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="180"/>
-                <DataGridTextColumn Header="Серия" Binding="{Binding Series}" Width="80"/>
-                <DataGridTextColumn Header="Номер" Binding="{Binding Number}" Width="100"/>
-                <DataGridTextColumn Header="Категории" Binding="{Binding LicenseCateg}" Width="120"/>
+                <DataGridTextColumn Header="Студент" Binding="{Binding StudentName}" Width="200"/>
+                <DataGridTextColumn Header="Номер ВУ" Binding="{Binding Number}" Width="120"/>
+                <DataGridTextColumn Header="Категории" Binding="{Binding LicenseCateg}" Width="100"/>
                 <DataGridTextColumn Header="Кем выдан" Binding="{Binding IssuedBy}" Width="200"/>
-                <DataGridTextColumn Header="Код подразделения" Binding="{Binding DivisionCode}" Width="120"/>
                 <DataGridTextColumn Header="Дата выдачи" Binding="{Binding IssueDate, StringFormat={}{0:dd.MM.yyyy}}" Width="100"/>
                 <DataGridTextColumn Header="Действительно до" Binding="{Binding ExpiryDate, StringFormat={}{0:dd.MM.yyyy}}" Width="110"/>
                 <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="100"/>

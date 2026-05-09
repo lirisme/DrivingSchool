@@ -2,13 +2,15 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Редактирование медицинской справки" 
-        Height="545" 
+        Height="600" 
         Width="550"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -24,7 +26,7 @@
         </Grid.RowDefinitions>
 
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="120"/>
+            <ColumnDefinition Width="130"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -39,22 +41,28 @@
                  IsReadOnly="True" Background="#F0F0F0"
                  Margin="0,5" Padding="5"/>
 
-        <!-- Серия -->
+        <!-- Серия с маской -->
         <TextBlock Grid.Row="2" Grid.Column="0" Text="Серия:*" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="SeriesTextBox" Grid.Row="2" Grid.Column="1" 
-                 Text="{Binding Series, UpdateSourceTrigger=PropertyChanged}" 
-                 Margin="0,5" Padding="5" MaxLength="10"/>
+                 Text="{Binding Series, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewTextInput="SeriesTextBox_PreviewTextInput"
+                 GotFocus="SeriesTextBox_GotFocus"
+                 LostFocus="SeriesTextBox_LostFocus"
+                 Margin="0,5" Padding="5" MaxLength="9"/>
 
-        <!-- Номер -->
+        <!-- Номер с маской -->
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Номер:*" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="NumberTextBox" Grid.Row="3" Grid.Column="1" 
-                 Text="{Binding Number, UpdateSourceTrigger=PropertyChanged}" 
-                 Margin="0,5" Padding="5" MaxLength="10"/>
+                 Text="{Binding Number, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewTextInput="NumberTextBox_PreviewTextInput"
+                 MaxLength="6"
+                 Margin="0,5" Padding="5"/>
 
         <!-- Дата выдачи -->
         <TextBlock Grid.Row="4" Grid.Column="0" Text="Дата выдачи:*" VerticalAlignment="Center" Margin="0,5"/>
         <DatePicker x:Name="IssueDatePicker" Grid.Row="4" Grid.Column="1" 
                     SelectedDate="{Binding IssueDate}"
+                    SelectedDateChanged="IssueDateChanged"
                     Margin="0,5" Padding="5" Height="30"/>
 
         <!-- Действительна до -->
@@ -67,19 +75,22 @@
         <TextBlock Grid.Row="6" Grid.Column="0" Text="Мед. учреждение:*" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="InstitutionTextBox" Grid.Row="6" Grid.Column="1" 
                  Text="{Binding MedicalInstitution, UpdateSourceTrigger=PropertyChanged}" 
+                 TextChanged="InstitutionTextBox_TextChanged"
                  Margin="0,5" Padding="5" MaxLength="200"/>
 
         <!-- Категории -->
         <TextBlock Grid.Row="7" Grid.Column="0" Text="Категории:" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="CategoriesTextBox" Grid.Row="7" Grid.Column="1" 
-                 Text="{Binding Categories, UpdateSourceTrigger=PropertyChanged}" 
+                 Text="{Binding Categories, UpdateSourceTrigger=PropertyChanged}"
+                 TextChanged="CategoriesTextBox_TextChanged"
                  Margin="0,5" Padding="5" MaxLength="50"
-                 ToolTip="Например: A, B, C"/>
+                 ToolTip="Например: A, B, C (для C, D, CE, DE срок действия 2 года)"/>
 
         <!-- Регион -->
         <TextBlock Grid.Row="8" Grid.Column="0" Text="Регион:" VerticalAlignment="Center" Margin="0,5"/>
         <TextBox x:Name="RegionTextBox" Grid.Row="8" Grid.Column="1" 
-                 Text="{Binding Region, UpdateSourceTrigger=PropertyChanged}" 
+                 Text="{Binding Region, UpdateSourceTrigger=PropertyChanged}"
+                 TextChanged="RegionTextBox_TextChanged"
                  Margin="0,5" Padding="5" MaxLength="100"/>
 
         <!-- Информация о сроке действия -->
@@ -89,8 +100,15 @@
                        Foreground="#E65100" FontSize="11" TextWrapping="Wrap"/>
         </Border>
 
+        <!-- Предупреждение -->
+        <Border x:Name="WarningBorder" Grid.Row="10" Grid.ColumnSpan="2" Background="#FFEBEE" Padding="8" CornerRadius="5" Margin="0,0,0,10" Visibility="Collapsed">
+            <TextBlock x:Name="WarningTextBlock" 
+                       Text="" 
+                       Foreground="#C62828" FontSize="11" TextWrapping="Wrap"/>
+        </Border>
+
         <!-- Кнопки -->
-        <StackPanel Grid.Row="11" Grid.ColumnSpan="2" 
+        <StackPanel Grid.Row="12" Grid.ColumnSpan="2" 
                     Orientation="Horizontal" 
                     HorizontalAlignment="Right" 
                     Margin="0,20,0,0">
